@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mc3000-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for controlling SKYRC MC3000 chargers over BLE"
 readme = "README.md"
 requires-python = ">=3.11"

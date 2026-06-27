@@ -1,5 +1,7 @@
 # mc3000-mcp
 
+<!-- mcp-name: io.github.nietonchique/mc3000-mcp -->
+
 [![CI](https://github.com/nietonchique/mc3000-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nietonchique/mc3000-mcp/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-green.svg)](server.json)
