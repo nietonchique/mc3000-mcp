@@ -197,6 +197,10 @@ def test_voltage_curve_parser() -> None:
     assert parsed["slot"] == 2
     assert parsed["interval_ms"] == 5000
     assert parsed["points_mv"][:3] == [4100, 4110, 4120]
+    assert parsed["point_count"] == 3
+    assert parsed["duration_seconds"] == 10.0
+    assert parsed["time_series"][2] == {"index": 2, "time_seconds": 10.0, "voltage_mv": 4120}
+    assert p.voltage_curve_to_csv(parsed).splitlines()[1] == "0,0.0,4100,4.100"
 
 
 def test_parse_notification_variants() -> None:

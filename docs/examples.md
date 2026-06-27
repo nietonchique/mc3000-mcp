@@ -40,6 +40,20 @@ The result includes validation and a built profile frame but does not write to h
 }
 ```
 
+## Export the app-compatible voltage curve
+
+```json
+{
+  "name": "charger.export_voltage_curve",
+  "arguments": {
+    "slot": 3,
+    "format": "csv"
+  }
+}
+```
+
+This uses the charger's own `0x56` curve command, the same mechanism the Android app uses. It is not a polling telemetry logger; the exported time-series contains voltage samples only.
+
 ## Emergency stop
 
 ```json

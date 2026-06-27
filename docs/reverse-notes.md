@@ -183,6 +183,27 @@ Cycle mode codes for break-in:
 - `0`: `C>D>C`
 - `1`: `D>C>D`
 
+## Voltage curve / app graph
+
+The Android detail screen graph is not a generic telemetry plot. It is an app-compatible voltage curve:
+
+- `DetailActivity` requests message `1018`, which sends `Config.getVoltageCurve(slot)`.
+- `Config.getVoltageCurve(slot)` builds opcode `0x56` with a zero-based slot.
+- `BleThread` collects the fragmented `0x56` response into a 245-byte buffer.
+- Bytes `3..4` are the sample interval in seconds; the app multiplies by `1000` into `Config.getTime[slot]`.
+- Bytes starting at `5..6` are big-endian millivolt samples, up to 120 points.
+- Zero means unused tail. During a running charge/discharge, the app appends the current status voltage into the first zero slot.
+- If the 120-point array fills, the app keeps every second sample (120 -> 60) and continues appending.
+- Export writes date/slot/type/mode/final voltage/temp/capacity summary plus a two-column time/voltage table.
+
+Current MCP mapping:
+
+- `mc3000_get_voltage_curve` exposes the low-level command.
+- `charger.get_voltage_curve` exposes the production-safe app-compatible time-series.
+- `charger.export_voltage_curve` exports the same data as JSON or CSV.
+
+The charger/app do not provide historical current/capacity/temperature series through this curve command; those are current status fields only.
+
 ## Live profile-write finding
 
 The Android app's profile builder always fills chemistry-appropriate voltage fields before saving

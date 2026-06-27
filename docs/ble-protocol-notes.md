@@ -12,6 +12,8 @@ See `docs/reverse-notes.md` for recovered frame details.
 
 - Normal command: 20 bytes.
 - Profile command (`0x11`): 40 bytes, written as two 20-byte chunks.
+- Voltage curve command (`0x56`): charger-stored app-compatible voltage history for one slot.
+- Voltage curve response contains slot, sample interval, and up to 120 voltage points; zero marks unused tail.
 - Checksum: sum of bytes with checksum byte zeroed, masked to `0xff`.
 - Status/curve slot arguments are zero-based indexes.
 - Start/stop frames use slot bitmasks.
