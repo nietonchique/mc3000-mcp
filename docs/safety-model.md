@@ -12,6 +12,11 @@ Safety is enforced in code first and documented second. Agent instructions are n
 - `charger.start` requires `confirmation_token=START_SLOT_<slot>`.
 - Emergency stop does not depend on profile validation.
 - Session logs redact device addresses.
+- App-compatible voltage-curve reads are read-only and do not require dangerous-action confirmation.
+
+## Companion skill
+
+`skill/SKILL.md` is an agent playbook, not a safety boundary. It teaches Hermes/LLM agents to ask for missing battery facts, prefer conservative profiles, show dry-run summaries, require explicit confirmation, monitor status after start, and use emergency stop on unsafe state. All hard limits and dangerous-action gates must remain enforced in MCP server code.
 
 ## Guidance only
 
