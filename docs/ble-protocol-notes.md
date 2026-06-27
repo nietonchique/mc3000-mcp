@@ -31,6 +31,18 @@ See `docs/reverse-notes.md` for detailed recovered frame notes. This file is the
 | `0x63` | write/ack | set basic settings |
 | `0xFE` | write | stop slot bitmask |
 
+## MC3000 vs MC5000 status selection
+
+The server must not infer charger model from inserted batteries. Detect or select the model using read-only charger/protocol behavior:
+
+- MC3000 status read uses opcode `0x55` with a zero-based slot argument.
+- MC5000 slot status read uses opcode `0x91` with a channel bitmask (`1 << slot`) and a different response layout.
+- If the user/device config says MC5000, use the `0x91` path.
+- If the model is unknown, probe `0x55` first and fall back to `0x91` only after timeout/unknown parse.
+- Do not send profile writes, starts, or other mutating commands to a charger whose model was not detected.
+
+The MC5000 status-layout facts were cross-checked against `kolinger/skyrc-mc3000`; do not copy GPL code into this Apache-2.0 project. Use independently written parsers and cite protocol facts only.
+
 ## Status fields
 
 Status frame (`0x55`) includes:

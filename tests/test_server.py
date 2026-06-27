@@ -44,7 +44,17 @@ class FakeServerClient:
         self.disconnected = True
         return {"connected": False}
 
-    async def poll_status(self, slot: int) -> dict[str, Any]:
+    async def poll_status(self, slot: int, *, mc5000: bool = False) -> dict[str, Any]:
+        if mc5000:
+            return {
+                "kind": "status",
+                "status": {
+                    "slot": slot,
+                    "battery_type": "LTO",
+                    "mode": "charge",
+                    "capacity_mah": 0,
+                },
+            }
         return {"kind": "status", "status": {"slot": slot}}
 
     async def poll_all_status(self) -> list[dict[str, Any]]:
@@ -100,6 +110,7 @@ def test_tools_list_contains_core_tools() -> None:
     assert "mc3000_status" in names
     assert "mc3000_build_profile" in names
     assert "mc3000_apply_profile" in names
+    assert "mc3000_mc5000_status" in names
     assert "charger.validate_profile" in names
     assert "charger.apply_profile" in names
     assert "charger.stop_all" in names
@@ -207,6 +218,10 @@ def test_all_tool_handlers_with_fake_client(monkeypatch: pytest.MonkeyPatch) -> 
     assert raw_wait["timeout"] == 3.0
     assert asyncio.run(server.tool_disconnect({})) == {"connected": False}
     assert fake.disconnected is True
+
+    mc5000_status = json.loads(result_text(call_tool("mc3000_mc5000_status", {"slot": 2})))
+    assert mc5000_status["kind"] == "status"
+    assert mc5000_status["status"]["battery_type"] == "LTO"
 
 
 def test_safe_charger_tools_with_fake_client(monkeypatch: pytest.MonkeyPatch) -> None:
