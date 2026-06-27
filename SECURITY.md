@@ -1,13 +1,29 @@
-# Security and safety
+# Security Policy
 
-This project can control a physical battery charger. Treat every write operation as safety-critical.
+This project controls physical battery-charging hardware. Treat every write/start action as potentially dangerous.
 
-Safety rules:
+## Hardware safety
 
-- Verify battery chemistry, slot number, current, voltage, and temperature limits before applying a profile.
-- Slot numbers in the API are zero-based (`0..3`), matching the official Android app internals.
-- Do not expose this MCP server to untrusted clients or networks.
-- Keep the charger in sight when testing new profiles.
-- Factory reset and calibration reset opcodes are documented but not exposed as first-class MCP tools.
+- Keep cells and charger in sight during testing.
+- Never guess chemistry, capacity, cell count, or voltage limits.
+- Use `charger.validate_profile` before any profile write.
+- `charger.apply_profile` defaults to dry-run and live writes require `APPLY_PROFILE_SLOT_<slot>`.
+- `charger.start` requires `START_SLOT_<slot>`.
+- Emergency stop tools (`charger.stop_slot`, `charger.stop_all`) intentionally bypass profile validation.
 
-If you find a protocol bug that could cause unsafe charging behavior, open a private security advisory or contact the maintainer before public disclosure.
+## Supported use
+
+The current implementation is focused on SKYRC MC3000-compatible BLE devices. Unsupported firmware or unknown clones may reject writes or interpret profiles differently.
+
+## Reporting vulnerabilities
+
+Please report safety/security issues privately before public disclosure. Include:
+
+- device model and firmware/hardware version;
+- MCP server version/commit;
+- exact tool call and profile payload, with personal identifiers redacted;
+- observed charger state before and after.
+
+## Telemetry and network
+
+The server performs no hidden network calls and has no telemetry. BLE discovery and local stdio MCP are the only default runtime channels.

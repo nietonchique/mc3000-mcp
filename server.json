@@ -1,0 +1,50 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "name": "io.github.nietonchique/mc3000-mcp",
+  "description": "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/nietonchique/mc3000-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registry_type": "pypi",
+      "registry_base_url": "https://pypi.org",
+      "identifier": "mc3000-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtime_hint": "pipx run mc3000-mcp"
+    }
+  ],
+  "tools": [
+    "charger.scan_devices",
+    "charger.connect",
+    "charger.get_status",
+    "charger.read_slots",
+    "charger.list_profiles",
+    "charger.validate_profile",
+    "charger.apply_profile",
+    "charger.start",
+    "charger.stop_slot",
+    "charger.stop_all",
+    "charger.export_session_log"
+  ],
+  "resources": [
+    "charger://profiles",
+    "charger://profile-schema",
+    "charger://safety-limits",
+    "charger://device-capabilities",
+    "charger://session-log/latest"
+  ],
+  "prompts": [
+    "charger_regular_charge",
+    "charger_refresh_nimh",
+    "charger_break_in_nimh",
+    "charger_lipo_storage",
+    "charger_emergency_stop"
+  ]
+}

@@ -175,6 +175,7 @@ class MC3000Client:
         await asyncio.sleep(0.05)
         await self.write(second)
         if start:
+            await asyncio.sleep(0.5)
             for slot in range(4):
                 if slot_mask & (1 << slot):
                     await self.write(protocol.command_start(slot))

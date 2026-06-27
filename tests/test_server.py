@@ -88,6 +88,9 @@ def test_tools_list_contains_core_tools() -> None:
     assert "mc3000_status" in names
     assert "mc3000_build_profile" in names
     assert "mc3000_apply_profile" in names
+    assert "charger.validate_profile" in names
+    assert "charger.apply_profile" in names
+    assert "charger.stop_all" in names
 
 
 def test_build_profile_tool_is_json_serializable() -> None:
@@ -183,6 +186,160 @@ def test_all_tool_handlers_with_fake_client(monkeypatch: pytest.MonkeyPatch) -> 
     assert fake.disconnected is True
 
 
+def test_safe_charger_tools_with_fake_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeServerClient()
+    monkeypatch.setattr(server, "_client", fake)
+    profile_id = "nimh-aa-conservative-charge"
+
+    profiles = json.loads(result_text(call_tool("charger.list_profiles")))
+    assert profile_id in profiles["profiles"]
+
+    validation = json.loads(
+        result_text(call_tool("charger.validate_profile", {"profile_id": profile_id})),
+    )
+    assert validation["ok"] is True
+
+    dry_run = json.loads(
+        result_text(call_tool("charger.apply_profile", {"slot": 3, "profile_id": profile_id})),
+    )
+    assert dry_run["dry_run"] is True
+    assert dry_run["applied"] is False
+    assert "profile_hex" in dry_run
+
+    missing_token = call_tool(
+        "charger.apply_profile",
+        {"slot": 3, "profile_id": profile_id, "dry_run": False},
+    )
+    assert missing_token["error"]["code"] == -32603
+    live = json.loads(
+        result_text(
+            call_tool(
+                "charger.apply_profile",
+                {
+                    "slot": 3,
+                    "profile_id": profile_id,
+                    "dry_run": False,
+                    "confirmation_token": "APPLY_PROFILE_SLOT_3",
+                },
+            ),
+        ),
+    )
+    assert live["applied"] is True
+
+    start_missing_token = call_tool("charger.start", {"slot": 3})
+    assert start_missing_token["error"]["code"] == -32603
+    started = json.loads(
+        result_text(call_tool("charger.start", {"slot": 3, "confirmation_token": "START_SLOT_3"})),
+    )
+    assert started["sent"] == "start"
+    assert json.loads(result_text(call_tool("charger.stop_all")))["slots"] == [0, 1, 2, 3]
+    assert json.loads(result_text(call_tool("charger.export_session_log")))["events"]
+
+    bad_apply = json.loads(
+        result_text(
+            call_tool(
+                "charger.apply_profile",
+                {"slot": 3, "profile": {"profile_id": "bad", "chemistry": "Mystery"}},
+            ),
+        ),
+    )
+    assert bad_apply["validation"]["ok"] is False
+    raw_profile = json.loads(
+        result_text(
+            call_tool(
+                "charger.validate_profile",
+                safety_profile_without_wrapper(),
+            ),
+        ),
+    )
+    assert raw_profile["ok"] is True
+
+
+def safety_profile_without_wrapper() -> JsonDict:
+    return {
+        "profile_id": "nimh-aa-direct",
+        "chemistry": "NiMH",
+        "capacity_mah": 2600,
+        "cell_count": 1,
+        "nominal_voltage_mv": 1200,
+        "operation": "charge",
+        "charge_current_ma": 260,
+        "discharge_current_ma": 200,
+        "charge_voltage_mv": 1650,
+        "discharge_cutoff_mv": 1000,
+        "timeout_minutes": 960,
+        "temperature_cutoff_c": 45,
+        "temperature_policy": "supervised",
+        "source": "test",
+        "risk_level": "low",
+    }
+
+
+def test_resources_and_prompts() -> None:
+    resources = asyncio.run(
+        server.handle({"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": {}}),
+    )
+    assert resources is not None
+    assert any(
+        item["uri"] == "charger://profile-schema" for item in resources["result"]["resources"]
+    )
+    profile_schema = asyncio.run(
+        server.handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "resources/read",
+                "params": {"uri": "charger://profile-schema"},
+            },
+        ),
+    )
+    assert profile_schema is not None
+    assert "Charger Battery Profile" in profile_schema["result"]["contents"][0]["text"]
+
+    prompts = asyncio.run(
+        server.handle({"jsonrpc": "2.0", "id": 3, "method": "prompts/list", "params": {}}),
+    )
+    assert prompts is not None
+    assert any(item["name"] == "charger_emergency_stop" for item in prompts["result"]["prompts"])
+    prompt = asyncio.run(
+        server.handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "prompts/get",
+                "params": {"name": "charger_emergency_stop"},
+            },
+        ),
+    )
+    assert prompt is not None
+    assert "stop_all" in prompt["result"]["messages"][0]["content"]["text"]
+
+    bad_resource = asyncio.run(
+        server.handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "resources/read",
+                "params": {"uri": "charger://missing"},
+            },
+        ),
+    )
+    assert bad_resource is not None
+    assert bad_resource["error"]["code"] == -32603
+    bad_prompt = asyncio.run(
+        server.handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "prompts/get",
+                "params": {"name": "missing"},
+            },
+        ),
+    )
+    assert bad_prompt is not None
+    assert bad_prompt["error"]["code"] == -32603
+
+
 def test_disconnect_without_client(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server, "_client", None)
     assert asyncio.run(server.tool_disconnect({})) == {"connected": False}
@@ -212,6 +369,8 @@ def test_tool_scan_and_connect(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_text_result() -> None:
     assert server._text_result("ok")["content"][0]["text"] == "ok"  # noqa: SLF001
+    server._log_event("x", {"address": "AA:BB"}, {"ok": True})  # noqa: SLF001
+    assert server._session_log[-1]["arguments"]["address"] == "<redacted-device-id>"  # noqa: SLF001
 
 
 def test_stdio_e2e_initialize_list_and_build_profile() -> None:
