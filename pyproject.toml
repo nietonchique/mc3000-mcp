@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mc3000-mcp"
+version = "0.1.0"
+description = "MCP server for controlling SKYRC MC3000 chargers over BLE"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "nietonchique"}]
+keywords = ["mcp", "ble", "bluetooth", "skyrc", "mc3000", "battery", "charger"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Home Automation",
+  "Topic :: System :: Hardware",
+]
+dependencies = ["bleak>=0.22"]
+
+[project.optional-dependencies]
+test = [
+  "bandit[toml]>=1.8",
+  "mypy>=1.19",
+  "pip-audit>=2.9",
+  "pytest>=8",
+  "pytest-cov>=7",
+  "ruff>=0.14",
+  "twine>=6.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/nietonchique/mc3000-mcp"
+Issues = "https://github.com/nietonchique/mc3000-mcp/issues"
+
+[project.scripts]
+mc3000-mcp = "mc3000_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=mc3000_mcp --cov-report=term-missing --cov-fail-under=100"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  # Mutually incompatible formatter/docstring rules.
+  "COM812",
+  "D203",
+  "D213",
+  "ISC001",
+  # Public hardware-control API intentionally has keyword-heavy frame builders.
+  "PLR0913",
+  # These produce noise without improving safety for this small protocol package.
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D107",
+  # MCP JSON and BLE callback APIs are inherently dynamic/boundary-layer code.
+  "ANN401",
+  "ASYNC109",
+  "BLE001",
+  "PLR0911",
+  "PLW0603",
+  "TRY301",
+  "T201",
+  "EM101",
+  "EM102",
+  "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "ANN001",
+  "ARG002",
+  "ARG004",
+  "ASYNC109",
+  "FBT001",
+  "FBT002",
+  "PLR2004",
+  "S101",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+pretty = true
+files = ["src", "tests"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "build", "dist", "reverse", "tests"]
+skips = ["B101"]
