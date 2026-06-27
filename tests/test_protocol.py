@@ -119,6 +119,61 @@ def test_profile_layout_and_split() -> None:
     assert first + second == profile
 
 
+def test_profile_uses_chemistry_voltage_defaults() -> None:
+    liion = p.build_profile(slot_mask=1, battery_type=0)
+    assert liion[11:13] == bytes([0x10, 0x68])
+    assert liion[13:15] == bytes([0x0B, 0xB8])
+    assert liion[24:26] == bytes([0x10, 0x36])
+
+    nimh = p.build_profile(slot_mask=8, battery_type=3, mode=3, capacity_mah=2600)
+    assert nimh[11:13] == bytes([0x06, 0x72])
+    assert nimh[13:15] == bytes([0x03, 0xE8])
+    assert nimh[15:17] == bytes([0x00, 0x32])
+    assert nimh[24:26] == bytes([0x03, 0xE8])
+
+    nizn = p.build_profile(slot_mask=1, battery_type=5)
+    assert nizn[11:13] == bytes([0x07, 0x6C])
+    assert nizn[13:15] == bytes([0x05, 0xDC])
+    ram = p.build_profile(slot_mask=1, battery_type=7)
+    assert ram[11:13] == bytes([0x06, 0x72])
+    assert ram[13:15] == bytes([0x03, 0x84])
+
+    explicit_off = p.build_profile(
+        slot_mask=8,
+        battery_type=3,
+        charge_stop_voltage_mv=0,
+        keep_voltage_mv=0,
+        negative_delta_mv=0,
+        trickle_current_ma=0,
+    )
+    assert explicit_off[11:13] == b"\x00\x00"
+    assert explicit_off[22] == 0
+    assert explicit_off[23] == 0
+    assert explicit_off[24:26] == b"\x00\x00"
+
+
+def test_profile_mode_specific_defaults() -> None:
+    refresh = p.build_profile(slot_mask=8, battery_type=3, mode=1)
+    assert refresh[15:17] == bytes([0x03, 0xE8])
+    assert refresh[19] == 30
+    assert refresh[20] == 1
+    assert refresh[22] == 3
+    assert refresh[23] == 1
+    assert refresh[29] == 60
+
+    cycle = p.build_profile(slot_mask=8, battery_type=3, mode=4)
+    assert cycle[15:17] == bytes([0x03, 0xE8])
+    assert cycle[19] == 20
+    assert cycle[29] == 10
+
+    breakin = p.build_profile(slot_mask=8, battery_type=3, mode=2, capacity_mah=2600)
+    assert breakin[7:9] == bytes([0x01, 0x04])
+    assert breakin[9:11] == bytes([0x02, 0x08])
+    assert breakin[19] == 60
+    assert breakin[27:29] == b"\x00\x00"
+    assert breakin[29] == 60
+
+
 def test_profile_cycle_modes_and_breakin() -> None:
     cycle = p.build_profile(slot_mask=1, cycle_mode="D>C>D")
     assert cycle[21] == 3

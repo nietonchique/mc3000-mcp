@@ -83,6 +83,18 @@ STATUS_NAMES = {
 
 CYCLE_MODE_TO_CODE = {"C>D": 0, "C>D>C": 1, "D>C": 2, "D>C>D": 3}
 BREAKIN_CYCLE_MODE_TO_CODE = {"C>D>C": 0, "D>C>D": 1}
+MODE_CHARGE = 0
+MODE_REFRESH = 1
+MODE_BREAKIN_OR_STORAGE = 2
+MODE_DISCHARGE = 3
+MODE_CYCLE = 4
+NI_CHEMISTRY_CODES = {3, 4, 6}
+NIZN_CODE = 5
+NIZN_RAM_CODES = {5, 7}
+DEFAULT_CHARGE_CURRENT_MA = 1000
+DEFAULT_DISCHARGE_CURRENT_MA = 500
+BREAKIN_CHARGE_DIVISOR = 10
+BREAKIN_DISCHARGE_DIVISOR = 5
 
 
 @dataclass(slots=True)
@@ -226,21 +238,21 @@ def build_profile(
     battery_type: int = 0,
     mode: int = 0,
     capacity_mah: int = 2000,
-    charge_current_ma: int = 1000,
-    discharge_current_ma: int = 500,
-    charge_stop_voltage_mv: int = 4200,
-    discharge_stop_voltage_mv: int = 3000,
-    charge_stop_current_ma: int = 100,
-    discharge_stop_current_ma: int = 500,
-    charge_rest_minutes: int = 0,
-    cycle_count: int = 1,
+    charge_current_ma: int | None = None,
+    discharge_current_ma: int | None = None,
+    charge_stop_voltage_mv: int | None = None,
+    discharge_stop_voltage_mv: int | None = None,
+    charge_stop_current_ma: int | None = None,
+    discharge_stop_current_ma: int | None = None,
+    charge_rest_minutes: int | None = None,
+    cycle_count: int | None = None,
     cycle_mode: int | str = 0,
-    negative_delta_mv: int = 0,
-    trickle_current_ma: int = 0,
-    keep_voltage_mv: int = 4150,
+    negative_delta_mv: int | None = None,
+    trickle_current_ma: int | None = None,
+    keep_voltage_mv: int | None = None,
     temp_cutoff: int = 45,
-    time_limit_minutes: int = 0,
-    discharge_rest_minutes: int = 0,
+    time_limit_minutes: int | None = None,
+    discharge_rest_minutes: int | None = None,
     breakin: bool = False,
 ) -> bytes:
     """Build the 40-byte profile frame used by the Android app.
@@ -252,9 +264,37 @@ def build_profile(
         raise ValueError(
             "slot_mask must be a bitmask 0..15 (slot1=1, slot2=2, slot3=4, slot4=8)",
         )
-    if isinstance(cycle_mode, str):
-        table = BREAKIN_CYCLE_MODE_TO_CODE if breakin else CYCLE_MODE_TO_CODE
-        cycle_mode = table[cycle_mode]
+    battery_type = int(battery_type)
+    mode = int(mode)
+    capacity_mah = int(capacity_mah)
+    breakin = _is_breakin_mode(battery_type, mode, explicit_breakin=breakin)
+    currents = _profile_current_defaults(
+        mode=mode,
+        capacity_mah=capacity_mah,
+        breakin=breakin,
+        charge_current_ma=charge_current_ma,
+        discharge_current_ma=discharge_current_ma,
+        discharge_stop_current_ma=discharge_stop_current_ma,
+        charge_rest_minutes=charge_rest_minutes,
+        discharge_rest_minutes=discharge_rest_minutes,
+    )
+    voltages = _profile_voltage_fields(
+        battery_type=battery_type,
+        mode=mode,
+        charge_current_ma=currents["charge_current_ma"],
+        charge_stop_voltage_mv=charge_stop_voltage_mv,
+        discharge_stop_voltage_mv=discharge_stop_voltage_mv,
+        charge_stop_current_ma=charge_stop_current_ma,
+        keep_voltage_mv=keep_voltage_mv,
+    )
+    ni_defaults = _profile_ni_defaults(
+        battery_type,
+        negative_delta_mv=negative_delta_mv,
+        trickle_current_ma=trickle_current_ma,
+    )
+    cycle_mode = _cycle_mode_code(cycle_mode, breakin=breakin)
+    cycle_count = 1 if cycle_count is None else cycle_count
+    time_limit_minutes = 0 if time_limit_minutes is None else time_limit_minutes
 
     buf = bytearray(PROFILE_LEN)
     buf[0] = 0x0F
@@ -263,23 +303,183 @@ def build_profile(
     buf[3] = int(battery_type) & 0xFF
     buf[4] = int(mode) & 0xFF
     _put_u16_be(buf, 5, capacity_mah)
-    _put_u16_be(buf, 7, charge_current_ma)
-    _put_u16_be(buf, 9, discharge_current_ma)
-    _put_u16_be(buf, 11, charge_stop_voltage_mv)
-    _put_u16_be(buf, 13, discharge_stop_voltage_mv)
-    _put_u16_be(buf, 15, charge_stop_current_ma)
-    _put_u16_be(buf, 17, discharge_stop_current_ma)
-    buf[19] = int(charge_rest_minutes) & 0xFF
+    _put_u16_be(buf, 7, currents["charge_current_ma"])
+    _put_u16_be(buf, 9, currents["discharge_current_ma"])
+    _put_u16_be(buf, 11, voltages["charge_stop_voltage_mv"])
+    _put_u16_be(buf, 13, voltages["discharge_stop_voltage_mv"])
+    _put_u16_be(buf, 15, voltages["charge_stop_current_ma"])
+    _put_u16_be(buf, 17, currents["discharge_stop_current_ma"])
+    buf[19] = currents["charge_rest_minutes"] & 0xFF
     buf[20] = int(cycle_count) & 0xFF
     buf[21] = int(cycle_mode) & 0xFF
-    buf[22] = int(negative_delta_mv) & 0xFF
+    buf[22] = ni_defaults["negative_delta_mv"] & 0xFF
     # APK stores eddy/trickle current in 10 mA units.
-    buf[23] = int(trickle_current_ma // 10) & 0xFF
-    _put_u16_be(buf, 24, keep_voltage_mv)
+    buf[23] = int(ni_defaults["trickle_current_ma"] // 10) & 0xFF
+    _put_u16_be(buf, 24, voltages["keep_voltage_mv"])
     buf[26] = int(temp_cutoff) & 0xFF
     _put_u16_be(buf, 27, 0 if breakin else time_limit_minutes)
-    buf[29] = int(discharge_rest_minutes) & 0xFF
+    buf[29] = currents["discharge_rest_minutes"] & 0xFF
     return with_checksum(buf, 39)
+
+
+def _is_breakin_mode(battery_type: int, mode: int, *, explicit_breakin: bool) -> bool:
+    return explicit_breakin or (
+        battery_type in NI_CHEMISTRY_CODES and mode == MODE_BREAKIN_OR_STORAGE
+    )
+
+
+def _profile_current_defaults(
+    *,
+    mode: int,
+    capacity_mah: int,
+    breakin: bool,
+    charge_current_ma: int | None,
+    discharge_current_ma: int | None,
+    discharge_stop_current_ma: int | None,
+    charge_rest_minutes: int | None,
+    discharge_rest_minutes: int | None,
+) -> dict[str, int]:
+    defaults = _profile_mode_defaults(mode=mode, capacity_mah=capacity_mah, breakin=breakin)
+    charge_current = _default_int(charge_current_ma, defaults["charge_current_ma"])
+    discharge_current = _default_int(discharge_current_ma, defaults["discharge_current_ma"])
+    return {
+        "charge_current_ma": charge_current,
+        "discharge_current_ma": discharge_current,
+        "discharge_stop_current_ma": _default_int(discharge_stop_current_ma, discharge_current),
+        "charge_rest_minutes": _default_int(charge_rest_minutes, defaults["charge_rest_minutes"]),
+        "discharge_rest_minutes": _default_int(
+            discharge_rest_minutes,
+            defaults["discharge_rest_minutes"],
+        ),
+    }
+
+
+def _profile_voltage_fields(
+    *,
+    battery_type: int,
+    mode: int,
+    charge_current_ma: int,
+    charge_stop_voltage_mv: int | None,
+    discharge_stop_voltage_mv: int | None,
+    charge_stop_current_ma: int | None,
+    keep_voltage_mv: int | None,
+) -> dict[str, int]:
+    defaults = _profile_voltage_defaults(battery_type)
+    charge_stop_current_default = (
+        charge_current_ma
+        if mode in (MODE_REFRESH, MODE_CYCLE)
+        else defaults["charge_stop_current_ma"]
+    )
+    return {
+        "charge_stop_voltage_mv": _default_int(
+            charge_stop_voltage_mv,
+            defaults["charge_stop_voltage_mv"],
+        ),
+        "discharge_stop_voltage_mv": _default_int(
+            discharge_stop_voltage_mv,
+            defaults["discharge_stop_voltage_mv"],
+        ),
+        "charge_stop_current_ma": _default_int(charge_stop_current_ma, charge_stop_current_default),
+        "keep_voltage_mv": _default_int(keep_voltage_mv, defaults["keep_voltage_mv"]),
+    }
+
+
+def _profile_ni_defaults(
+    battery_type: int,
+    *,
+    negative_delta_mv: int | None,
+    trickle_current_ma: int | None,
+) -> dict[str, int]:
+    return {
+        "negative_delta_mv": _default_int(
+            negative_delta_mv,
+            3 if battery_type in NI_CHEMISTRY_CODES else 0,
+        ),
+        "trickle_current_ma": _default_int(
+            trickle_current_ma,
+            10 if battery_type in NI_CHEMISTRY_CODES else 0,
+        ),
+    }
+
+
+def _cycle_mode_code(cycle_mode: int | str, *, breakin: bool) -> int:
+    if not isinstance(cycle_mode, str):
+        return int(cycle_mode)
+    table = BREAKIN_CYCLE_MODE_TO_CODE if breakin else CYCLE_MODE_TO_CODE
+    return table[cycle_mode]
+
+
+def _profile_mode_defaults(*, mode: int, capacity_mah: int, breakin: bool) -> dict[str, int]:
+    if breakin:
+        return {
+            "charge_current_ma": _clamp_current(capacity_mah // BREAKIN_CHARGE_DIVISOR, 10, 3000),
+            "discharge_current_ma": _clamp_current(
+                capacity_mah // BREAKIN_DISCHARGE_DIVISOR,
+                10,
+                2000,
+            ),
+            "charge_rest_minutes": 60,
+            "discharge_rest_minutes": 60,
+        }
+    if mode == MODE_REFRESH:
+        return {
+            "charge_current_ma": DEFAULT_CHARGE_CURRENT_MA,
+            "discharge_current_ma": DEFAULT_DISCHARGE_CURRENT_MA,
+            "charge_rest_minutes": 30,
+            "discharge_rest_minutes": 60,
+        }
+    if mode == MODE_CYCLE:
+        return {
+            "charge_current_ma": DEFAULT_CHARGE_CURRENT_MA,
+            "discharge_current_ma": DEFAULT_DISCHARGE_CURRENT_MA,
+            "charge_rest_minutes": 20,
+            "discharge_rest_minutes": 10,
+        }
+    return {
+        "charge_current_ma": DEFAULT_CHARGE_CURRENT_MA,
+        "discharge_current_ma": DEFAULT_DISCHARGE_CURRENT_MA,
+        "charge_rest_minutes": 0,
+        "discharge_rest_minutes": 0,
+    }
+
+
+def _clamp_current(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(maximum, value))
+
+
+def _default_int(value: int | None, default: int) -> int:
+    return int(default if value is None else value)
+
+
+def _profile_voltage_defaults(battery_type: int) -> dict[str, int]:
+    """Return app/manual-compatible voltage defaults for omitted profile fields.
+
+    The charger silently ignored live NiMH profile writes when charge/keep voltages
+    were sent as zero. The Android app's UI always fills chemistry-appropriate
+    voltages before saving the 0x11 frame, even when a field is not relevant to the
+    visible mode. Keep explicit zero values from callers, but never default Ni-based
+    profiles to LiIon voltages or to zero.
+    """
+    if battery_type in NI_CHEMISTRY_CODES:
+        return {
+            "charge_stop_voltage_mv": 1650,
+            "discharge_stop_voltage_mv": 1000,
+            "charge_stop_current_ma": 50,
+            "keep_voltage_mv": 1000,
+        }
+    if battery_type in NIZN_RAM_CODES:
+        return {
+            "charge_stop_voltage_mv": 1900 if battery_type == NIZN_CODE else 1650,
+            "discharge_stop_voltage_mv": 1500 if battery_type == NIZN_CODE else 900,
+            "charge_stop_current_ma": 50,
+            "keep_voltage_mv": 1200,
+        }
+    return {
+        "charge_stop_voltage_mv": 4200,
+        "discharge_stop_voltage_mv": 3000,
+        "charge_stop_current_ma": 100,
+        "keep_voltage_mv": 4150,
+    }
 
 
 def split_profile(profile: bytes) -> tuple[bytes, bytes]:

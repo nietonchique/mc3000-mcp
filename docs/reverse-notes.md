@@ -182,3 +182,33 @@ Cycle mode codes for break-in:
 
 - `0`: `C>D>C`
 - `1`: `D>C>D`
+
+## Live profile-write finding
+
+The Android app's profile builder always fills chemistry-appropriate voltage fields before saving
+`parameter_1`/`parameter_2`. A NiMH profile with `charge_stop_voltage=0` and `keep_voltage=0`
+was accepted at the BLE write layer but ignored by the charger: starting the slot continued the
+previous/default Charge program at about 200 mA.
+
+After matching the Android/manual NiMH defaults (`charge_stop_voltage=1650mV`,
+`discharge_stop_voltage=1000mV`, `charge_stop_current=50mA`, `keep_voltage=1000mV`), the same
+`0x11` two-chunk write took effect on real hardware. Verified on physical slot 4 / API slot 3:
+
+- Charge profile with `charge_current=500mA` started as `mode=charge`, `status=charge`,
+  `current_ma=501`.
+- Discharge profile with `discharge_current=200mA` started as `mode=discharge`,
+  `status=discharge`, `current_ma=200`.
+
+Conclusion: stop-before-write is necessary, but not sufficient. The profile must also contain
+valid non-zero chemistry voltage defaults for fields the charger validates even if the UI hides them
+for the selected mode.
+
+A follow-up live probe confirmed the packet layout stays the same across modes, while mode-specific
+semantics/defaults matter. Physical slot 4 / API slot 3 accepted and ran these NiMH profiles:
+
+- Refresh: `mode_code=1`, `mode=refresh`, `status=charge`, `current_ma=260`.
+- Break-in: `mode_code=2`, `mode=storage_or_breakin`, `status=discharge`, `current_ma=519`
+  for a 2600mAh profile (`C/5` discharge phase).
+- Cycle: `mode_code=4`, `mode=cycle`, `status=discharge`, `current_ma=200`.
+
+Each probe was stopped afterwards and verified as `status=standby`, `current_ma=0`.

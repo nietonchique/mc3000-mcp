@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mc3000": {
+      "command": "pipx",
+      "args": ["run", "mc3000-mcp"]
+    }
+  }
+}

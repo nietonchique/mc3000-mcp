@@ -1,5 +1,9 @@
 # mc3000-mcp
 
+[![CI](https://github.com/nietonchique/mc3000-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nietonchique/mc3000-mcp/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-stdio-green.svg)](server.json)
+
 MCP server for monitoring and controlling SKYRC MC3000 battery chargers over Bluetooth Low Energy.
 
 The BLE protocol was recovered from the official Android app (`MC3000` 4.1.2). The server exposes charger operations as MCP tools so an agent can inspect slot state, read voltage curves, stop/start slots, and apply charge/discharge profiles.
@@ -60,21 +64,23 @@ hermes mcp test mc3000
 
 ## MCP tools
 
+Preferred production tools are namespaced as `charger.*` and enforce dry-run/confirmation on dangerous actions:
+
 | Tool | Purpose |
 | --- | --- |
-| `mc3000_scan` | Scan for MC3000-like BLE devices. |
-| `mc3000_connect` | Connect by BLE address, or scan and connect to the first match. |
-| `mc3000_disconnect` | Disconnect from charger. |
-| `mc3000_status` | Poll one zero-based slot or all four slots. |
-| `mc3000_start` | Start a slot. |
-| `mc3000_stop` | Stop a slot. |
-| `mc3000_get_version` | Read firmware/hardware version. |
-| `mc3000_get_basic` | Read basic device settings. |
-| `mc3000_set_basic` | Write basic device settings. |
-| `mc3000_get_voltage_curve` | Read and parse a slot voltage curve. |
-| `mc3000_build_profile` | Build a profile frame without sending it. |
-| `mc3000_apply_profile` | Write a profile to selected slots; optionally start them. |
-| `mc3000_send_raw` | Send raw hex frame(s). |
+| `charger.scan_devices` | Read-only BLE scan. |
+| `charger.connect` | Connect to a selected device. |
+| `charger.get_status` | Read current charger status. |
+| `charger.read_slots` | Read one slot or all slots. |
+| `charger.list_profiles` | List bundled example profiles. |
+| `charger.validate_profile` | Validate a battery profile against enforced limits. |
+| `charger.apply_profile` | Validate and apply a profile; dry-run by default, live write requires `APPLY_PROFILE_SLOT_<slot>`. |
+| `charger.start` | Start a slot; requires `START_SLOT_<slot>`. |
+| `charger.stop_slot` | Emergency stop for one slot. |
+| `charger.stop_all` | Emergency stop for all slots. |
+| `charger.export_session_log` | Export redacted in-memory session log. |
+
+Legacy `mc3000_*` tools remain for low-level protocol work and backwards compatibility.
 
 ## Example MCP calls
 
@@ -110,7 +116,18 @@ Stop physical slot 1:
 
 ## Protocol notes
 
-See `docs/reverse-notes.md` for the recovered frame layout, opcodes, and payload mappings.
+See `docs/reverse-notes.md` and `docs/ble-protocol-notes.md` for the recovered frame layout, opcodes, and payload mappings.
+
+Additional docs:
+
+- `SECURITY.md` — hardware safety and disclosure policy.
+- `docs/supported-devices.md` — confirmed devices and compatibility policy.
+- `docs/safety-model.md` — what is enforced in code vs guidance.
+- `docs/profile-schema.md` — battery profile schema and examples.
+- `docs/examples.md` — safe dry-run/apply/start/stop examples.
+- `docs/publishing.md` — release/listing descriptions and manual publishing checklist.
+- `skill/SKILL.md` — agent playbook for safe charger operation.
+- `server.json` — MCP registry metadata draft.
 
 Short version:
 
