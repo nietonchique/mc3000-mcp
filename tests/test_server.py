@@ -60,6 +60,18 @@ class FakeServerClient:
         timeout: float = 3.0,
     ) -> dict[str, Any]:
         _ = timeout
+        if expect_opcode == protocol.Opcode.VOLTAGE_CURVE:
+            curve = bytearray(protocol.CURVE_LEN)
+            curve[0] = 0x0F
+            curve[1] = protocol.Opcode.VOLTAGE_CURVE
+            curve[2] = frame[2]
+            curve[3] = 0
+            curve[4] = 5
+            for idx, mv in enumerate((4100, 4110, 4120)):
+                pos = 5 + idx * 2
+                curve[pos] = mv // 256
+                curve[pos + 1] = mv % 256
+            return protocol.parse_voltage_curve(bytes(curve))
         return {
             "opcode": expect_opcode if expect_opcode is not None else frame[1],
             "frame": frame.hex(),
@@ -158,10 +170,21 @@ def test_all_tool_handlers_with_fake_client(monkeypatch: pytest.MonkeyPatch) -> 
         json.loads(result_text(call_tool("mc3000_set_basic", {"system_beep": True})))["opcode"]
         == protocol.Opcode.SET_BASIC
     )
-    assert (
-        json.loads(result_text(call_tool("mc3000_get_voltage_curve", {"slot": 0})))["opcode"]
-        == protocol.Opcode.VOLTAGE_CURVE
+    assert json.loads(result_text(call_tool("mc3000_get_voltage_curve", {"slot": 0})))["slot"] == 0
+    charger_curve = json.loads(result_text(call_tool("charger.get_voltage_curve", {"slot": 0})))
+    assert charger_curve["source"] == "charger_voltage_curve_command_0x56"
+    assert charger_curve["time_series"][1] == {"index": 1, "time_seconds": 5.0, "voltage_mv": 4110}
+    curve_csv = json.loads(
+        result_text(call_tool("charger.export_voltage_curve", {"slot": 0, "format": "csv"})),
     )
+    assert curve_csv["content"].splitlines()[0] == "index,time_seconds,voltage_mv,voltage_v"
+    assert "1,5.0,4110,4.110" in curve_csv["content"]
+    curve_json = json.loads(
+        result_text(call_tool("charger.export_voltage_curve", {"slot": 0, "format": "json"})),
+    )
+    assert curve_json["content"]["point_count"] == 3
+    bad_curve_format = call_tool("charger.export_voltage_curve", {"slot": 0, "format": "xlsx"})
+    assert bad_curve_format["error"]["code"] == -32603
 
     profile = protocol.build_profile(slot_mask=1)
     apply_payload = json.loads(
@@ -234,6 +257,14 @@ def test_safe_charger_tools_with_fake_client(monkeypatch: pytest.MonkeyPatch) ->
     assert started["sent"] == "start"
     assert json.loads(result_text(call_tool("charger.stop_all")))["slots"] == [0, 1, 2, 3]
     assert json.loads(result_text(call_tool("charger.export_session_log")))["events"]
+
+    async def raw_curve(args: JsonDict) -> JsonDict:
+        _ = args
+        return {"opcode": int(protocol.Opcode.VOLTAGE_CURVE)}
+
+    monkeypatch.setattr(server, "tool_get_voltage_curve", raw_curve)
+    fallback_curve = asyncio.run(server.tool_charger_get_voltage_curve({"slot": 0}))
+    assert fallback_curve == {"opcode": int(protocol.Opcode.VOLTAGE_CURVE)}
 
     bad_apply = json.loads(
         result_text(

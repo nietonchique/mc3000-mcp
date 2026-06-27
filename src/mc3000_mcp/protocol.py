@@ -578,12 +578,53 @@ def parse_voltage_curve(data: bytes) -> dict[str, Any]:
     slot = data[2] & 0xFF
     interval_ms = _u16_be(data[3], data[4]) * 1000
     points = [_u16_be(data[i - 1], data[i]) for i in range(6, CURVE_LEN, 2)]
+    time_series = voltage_curve_time_series(points, interval_ms=interval_ms)
     return {
         "slot": slot,
         "interval_ms": interval_ms,
         "points_mv": points,
+        "point_count": len(time_series),
+        "duration_seconds": time_series[-1]["time_seconds"] if time_series else 0.0,
+        "time_series": time_series,
         "raw_hex": data[:CURVE_LEN].hex().upper(),
     }
+
+
+def voltage_curve_time_series(
+    points_mv: list[int],
+    *,
+    interval_ms: int,
+) -> list[dict[str, int | float]]:
+    """Convert the MC3000 app-style voltage curve array into timestamped points.
+
+    The Android app stores up to 120 voltage samples and treats zero as empty tail.
+    When the array fills during a long run, the app downsamples in-place and keeps
+    using the same 120-point buffer. The charger-provided interval is therefore
+    the authoritative spacing between adjacent stored samples.
+    """
+    interval_seconds = interval_ms / 1000.0
+    series: list[dict[str, int | float]] = []
+    for index, voltage_mv in enumerate(points_mv):
+        if voltage_mv <= 0:
+            break
+        series.append(
+            {
+                "index": index,
+                "time_seconds": round(index * interval_seconds, 3),
+                "voltage_mv": voltage_mv,
+            },
+        )
+    return series
+
+
+def voltage_curve_to_csv(curve: dict[str, Any]) -> str:
+    rows = ["index,time_seconds,voltage_mv,voltage_v"]
+    for point in curve.get("time_series", []):
+        voltage_mv = int(point["voltage_mv"])
+        rows.append(
+            f"{point['index']},{point['time_seconds']},{voltage_mv},{voltage_mv / 1000:.3f}",
+        )
+    return "\n".join(rows) + "\n"
 
 
 def mac_to_bytes(mac: str) -> bytes:

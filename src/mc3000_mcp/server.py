@@ -115,6 +115,30 @@ async def tool_get_voltage_curve(args: dict[str, Any]) -> Any:
     )
 
 
+async def tool_charger_get_voltage_curve(args: dict[str, Any]) -> Any:
+    curve = await tool_get_voltage_curve(args)
+    if "points_mv" in curve:
+        curve = dict(curve)
+        curve.setdefault("kind", "voltage_curve")
+        curve.setdefault("source", "charger_voltage_curve_command_0x56")
+        return curve
+    return curve
+
+
+async def tool_export_voltage_curve(args: dict[str, Any]) -> Any:
+    curve = await tool_charger_get_voltage_curve(args)
+    output_format = str(args.get("format", "json")).lower()
+    if output_format == "csv":
+        return {
+            "slot": curve.get("slot"),
+            "format": "csv",
+            "content": protocol.voltage_curve_to_csv(curve),
+        }
+    if output_format != "json":
+        raise ValueError("format must be 'json' or 'csv'")
+    return {"slot": curve.get("slot"), "format": "json", "content": curve}
+
+
 async def tool_build_profile(args: dict[str, Any]) -> Any:
     profile = protocol.build_profile(**args)
     first, second = protocol.split_profile(profile)
@@ -436,6 +460,31 @@ TOOLS: dict[str, tuple[str, dict[str, Any], ToolHandler]] = {
         "Read one slot or all slot statuses. Slot is zero-based 0..3.",
         {"type": "object", "properties": {"slot": {"type": "integer", "minimum": 0, "maximum": 3}}},
         tool_status,
+    ),
+    "charger.get_voltage_curve": (
+        "Read the charger-stored app-style voltage time-series for one slot. No polling.",
+        {
+            "type": "object",
+            "properties": {
+                "slot": {"type": "integer", "minimum": 0, "maximum": 3},
+                "timeout": {"type": "number", "default": 8},
+            },
+            "required": ["slot"],
+        },
+        tool_charger_get_voltage_curve,
+    ),
+    "charger.export_voltage_curve": (
+        "Export the charger-stored voltage curve as JSON or CSV.",
+        {
+            "type": "object",
+            "properties": {
+                "slot": {"type": "integer", "minimum": 0, "maximum": 3},
+                "format": {"type": "string", "enum": ["json", "csv"], "default": "json"},
+                "timeout": {"type": "number", "default": 8},
+            },
+            "required": ["slot"],
+        },
+        tool_export_voltage_curve,
     ),
     "charger.list_profiles": (
         "List bundled safe example profiles.",

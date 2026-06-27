@@ -72,6 +72,8 @@ Preferred production tools are namespaced as `charger.*` and enforce dry-run/con
 | `charger.connect` | Connect to a selected device. |
 | `charger.get_status` | Read current charger status. |
 | `charger.read_slots` | Read one slot or all slots. |
+| `charger.get_voltage_curve` | Read charger-stored voltage time-series (`0x56`), app-compatible and no polling. |
+| `charger.export_voltage_curve` | Export that voltage curve as JSON or CSV. |
 | `charger.list_profiles` | List bundled example profiles. |
 | `charger.validate_profile` | Validate a battery profile against enforced limits. |
 | `charger.apply_profile` | Validate and apply a profile; dry-run by default, live write requires `APPLY_PROFILE_SLOT_<slot>`. |

@@ -25,6 +25,8 @@
     "charger.connect",
     "charger.get_status",
     "charger.read_slots",
+    "charger.get_voltage_curve",
+    "charger.export_voltage_curve",
     "charger.list_profiles",
     "charger.validate_profile",
     "charger.apply_profile",
