@@ -2,7 +2,9 @@
 
 The canonical JSON Schema is exposed at MCP resource `charger://profile-schema` and implemented in `mc3000_mcp.safety.PROFILE_SCHEMA`.
 
-Required fields:
+Profiles describe battery facts and intended operation. They are validated before any live write. The MCP server, not the LLM, enforces hard limits.
+
+## Required fields
 
 - `profile_id`
 - `chemistry`
@@ -17,7 +19,7 @@ Required fields:
 - `source`
 - `risk_level`
 
-Common optional fields:
+## Common optional fields
 
 - `nominal_voltage_mv`
 - `charge_voltage_mv`
@@ -27,6 +29,19 @@ Common optional fields:
 - `negative_delta_mv`
 - `trickle_current_ma`
 - `notes`
+
+## Supported operations
+
+The current MC3000 mapping supports:
+
+- `charge`
+- `discharge`
+- `refresh`
+- `break_in` for NiMH/NiCd/Eneloop-style cells
+- `cycle`
+- `storage` for supported lithium chemistries
+
+Unsupported chemistry/operation combinations are rejected by `charger.validate_profile`.
 
 ## Example: conservative NiMH AA charge
 
@@ -53,4 +68,22 @@ Common optional fields:
 }
 ```
 
-Run `charger.validate_profile` before `charger.apply_profile`.
+## Example validation call
+
+```json
+{
+  "name": "charger.validate_profile",
+  "arguments": {
+    "profile_id": "nimh-aa-conservative-charge"
+  }
+}
+```
+
+## Safety notes
+
+- Never infer chemistry from physical size. AA/AAA can be NiMH, NiCd, NiZn, RAM, alkaline primary, lithium primary, or Li-ion in a similar form factor.
+- MC3000 slots are single-cell slots. Multi-cell packs require a separate supported workflow and should not be treated as a single slot profile.
+- Primary/non-rechargeable cells must not be charged.
+- `risk_level=high` is allowed as data but should trigger extra human review and supervision.
+
+Run `charger.validate_profile` before `charger.apply_profile`; run `charger.apply_profile` dry-run before any live write.
