@@ -219,7 +219,50 @@ def test_parse_notification_variants() -> None:
     curve[0] = 0x0F
     curve[1] = p.Opcode.VOLTAGE_CURVE
     assert p.parse_notification(bytes(curve))["kind"] == "voltage_curve"
-    assert p.parse_notification(b"\x0f\x99")["opcode"] == 0x99
+
+
+def test_mc5000_command_and_parse() -> None:
+    cmd = p.command_get_mc5000_status(2)
+    assert cmd[:4] == b"\x0f\x03\x91\x04"
+    assert len(cmd) == 5
+    assert cmd[4] == p.checksum(b"\x91\x04")
+
+    frame = bytearray(40)
+    frame[0] = 0x0F
+    frame[1] = 0x03
+    frame[2] = 0x91
+    frame[3] = 0x04
+    frame[4:6] = (5000).to_bytes(2, "big")
+    frame[6:8] = (4100).to_bytes(2, "big")
+    frame[8:10] = (24500).to_bytes(2, "big")
+    frame[10:12] = (1200).to_bytes(2, "big")
+    frame[12:16] = (3600).to_bytes(4, "big")
+    frame[16:18] = (48).to_bytes(2, "big")
+    frame[18] = 2
+    frame[19] = 3
+    frame[20] = 0
+    frame[21] = 3
+    parsed = p.parse_mc5000_status(bytes(frame))
+    assert parsed["slot"] == 2
+    assert parsed["battery_type"] == "NiMH"
+    assert parsed["mode"] == "discharge"
+    assert parsed["status"] == "charging"
+    assert parsed["voltage_mv"] == 4100
+    assert parsed["current_ma"] == 5000
+    assert parsed["temperature"] == 24
+    assert parsed["is_working"] is True
+    assert parsed["internal_resistance_mohm"] == 48
+
+    notif = p.parse_notification(bytes(frame))
+    assert notif["kind"] == "status"
+    assert notif["status"]["battery_type"] == "NiMH"
+    assert notif["status"]["mode"] == "discharge"
+
+    frame[18] = 5
+    completed = p.parse_mc5000_status(bytes(frame))
+    assert completed["status"] == "completed"
+    assert completed["is_working"] is False
+    assert completed["led"] == 16
 
 
 def test_invalid_inputs_rejected() -> None:

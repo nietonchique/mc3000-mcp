@@ -150,7 +150,12 @@ class MC3000Client:
             ):
                 return parsed
 
-    async def poll_status(self, slot: int) -> dict[str, Any]:
+    async def poll_status(self, slot: int, *, mc5000: bool = False) -> dict[str, Any]:
+        if mc5000:
+            return await self.request(
+                protocol.command_get_mc5000_status(slot),
+                protocol.Opcode.MC5000_SLOT_STATUS,
+            )
         return await self.request(protocol.command_get_status(slot), protocol.Opcode.STATUS)
 
     async def poll_all_status(self) -> list[dict[str, Any]]:
@@ -209,4 +214,5 @@ def _kind_matches(opcode: int, parsed: dict[str, Any]) -> bool:
         or (opcode == protocol.Opcode.GET_BASIC and parsed.get("kind") == "basic")
         or (opcode == protocol.Opcode.VERSION and parsed.get("kind") == "version")
         or (opcode == protocol.Opcode.VOLTAGE_CURVE and parsed.get("kind") == "voltage_curve")
+        or (opcode == protocol.Opcode.MC5000_SLOT_STATUS and parsed.get("kind") == "status")
     )

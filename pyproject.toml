@@ -85,6 +85,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/mc3000_mcp/protocol.py" = [
+  "PLR2004",
+]
 "tests/**/*.py" = [
   "ANN001",
   "ARG002",

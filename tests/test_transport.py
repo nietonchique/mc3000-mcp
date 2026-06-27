@@ -249,3 +249,29 @@ def test_send_profile_e2e_write_sequence(monkeypatch: pytest.MonkeyPatch) -> Non
     assert writes[3] == profile[20:]
     assert writes[4] == protocol.command_start(0)
     assert writes[5] == protocol.command_start(1)
+
+
+def test_poll_status_mc5000(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(transport, "BleakClient", FakeBleakClient)
+    monkeypatch.setattr(transport, "BleakScanner", FakeScanner)
+    client = transport.MC3000Client()
+    asyncio.run(client.connect("AA:BB:CC:DD:EE:02"))
+    fake_client = cast("FakeBleakClient", client.client)
+
+    mc5000_frame = bytearray(40)
+    mc5000_frame[0] = 0x0F
+    mc5000_frame[1] = 0x03
+    mc5000_frame[2] = protocol.Opcode.MC5000_SLOT_STATUS
+    mc5000_frame[3] = 0x08
+    mc5000_frame[18] = 2
+    mc5000_frame[19] = 3
+    mc5000_frame[21] = 3
+    client._on_notify(None, bytearray(mc5000_frame))  # noqa: SLF001
+
+    result = asyncio.run(client.poll_status(3, mc5000=True))
+    assert result["kind"] == "status"
+    assert result["status"]["slot"] == 3
+    assert result["status"]["battery_type"] == "NiMH"
+    assert result["status"]["mode"] == "discharge"
+    assert result["status"]["status"] == "charging"
+    assert fake_client.writes[-1] == protocol.command_get_mc5000_status(3)

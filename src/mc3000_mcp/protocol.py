@@ -38,6 +38,7 @@ class Opcode(IntEnum):
     RESTORE_FACTORY = 0x65
     RESTORE_CALIBRATION = 0x66
     STOP = 0xFE
+    MC5000_SLOT_STATUS = 0x91
 
 
 BATTERY_TYPES = (
@@ -52,6 +53,61 @@ BATTERY_TYPES = (
     "LTO",
     "Na-Lion",
 )
+
+BATTERY_TYPES_MC5000 = (
+    "LiIon",
+    "LiIon_HV",
+    "LiFePO4",
+    "NiMH",
+    "NiCd",
+    "Eneloop",
+    "NiZn",
+    "RAM",
+    "LTO",
+    "NaIon",
+)
+
+MC5000_MODE_GROUPS: dict[int, dict[int, str]] = {
+    0: {0: "charge", 1: "storage", 2: "discharge", 3: "cycle"},
+    1: {0: "charge", 1: "refresh", 2: "break_in", 3: "discharge", 4: "cycle"},
+    2: {0: "charge", 1: "discharge", 2: "cycle"},
+}
+
+MC5000_MODE_GROUP_FOR_TYPE: dict[int, int] = {}
+for _group, _types in {
+    0: (0, 1, 2, 8, 9),
+    1: (3, 4, 5),
+    2: (6, 7),
+}.items():
+    for _t in _types:
+        MC5000_MODE_GROUP_FOR_TYPE[_t] = _group
+
+MC5000_STATUSES: dict[int, str] = {
+    0: "standby",
+    1: "processing",
+    2: "charging",
+    3: "discharging",
+    4: "resting",
+    5: "completed",
+    6: "completed",
+}
+
+MC5000_ERRORS: dict[int, str] = {
+    0: "",
+    1: "input_volt_low",
+    2: "input_volt_high",
+    3: "connection_break",
+    4: "cap_cut",
+    5: "time_cut",
+    6: "sys_temp_high",
+    7: "calibration_failed",
+    8: "high_internal_resistance",
+    9: "connection_break",
+    10: "battery_type_error",
+    11: "overload_protection",
+    12: "reversed_polarity",
+    13: "fully_charged",
+}
 
 MODE_NAMES = {
     0: "charge",
@@ -173,6 +229,18 @@ def command_get_status(slot: int) -> bytes:
     _validate_slot(slot)
     # APK shortcut: [0f, 55, slot, zeros..., slot + 100]
     return make_frame(Opcode.STATUS, bytes([slot]))
+
+
+def command_get_mc5000_status(slot: int) -> bytes:
+    _validate_slot(slot)
+    channel = 1 << slot
+    buf = bytearray(5)
+    buf[0] = 0x0F
+    buf[1] = 0x03
+    buf[2] = Opcode.MC5000_SLOT_STATUS
+    buf[3] = channel
+    buf[4] = checksum(buf[2:4])
+    return bytes(buf)
 
 
 def command_start(slot: int) -> bytes:
@@ -500,6 +568,8 @@ def parse_notification(data: bytes) -> dict[str, Any]:
         return {"kind": "version", **parse_version(data)}
     if op == Opcode.VOLTAGE_CURVE and len(data) >= CURVE_LEN:
         return {"kind": "voltage_curve", **parse_voltage_curve(data)}
+    if len(data) >= 5 and data[0] == 0x0F and data[2] == Opcode.MC5000_SLOT_STATUS:
+        return {"kind": "status", "status": parse_mc5000_status(data)}
     if op in (
         Opcode.START,
         Opcode.SET_PROFILE,
@@ -627,7 +697,64 @@ def voltage_curve_to_csv(curve: dict[str, Any]) -> str:
     return "\n".join(rows) + "\n"
 
 
+def parse_mc5000_status(frame: bytes) -> dict[str, Any]:
+    slot: int | None = None
+    if len(frame) >= 5:
+        channel = frame[3] & 0xFF
+        for s in range(4):
+            if (1 << s) == channel:
+                slot = s
+                break
+    battery_type_code = frame[21] if len(frame) > 21 else 0
+    battery_type = (
+        BATTERY_TYPES_MC5000[battery_type_code]
+        if battery_type_code < len(BATTERY_TYPES_MC5000)
+        else "unknown"
+    )
+    mode_code = frame[19] if len(frame) > 19 else 0
+    mode = "unknown"
+    group = MC5000_MODE_GROUP_FOR_TYPE.get(battery_type_code)
+    if group is not None:
+        mode = MC5000_MODE_GROUPS[group].get(mode_code, "unknown")
+    status_code = frame[18] if len(frame) > 18 else 0
+    status = MC5000_STATUSES.get(status_code, "error")
+    error_code = frame[20] if len(frame) > 20 else 0
+    error = MC5000_ERRORS.get(error_code, "ERROR") if error_code else ""
+    voltage_v = float(int.from_bytes(frame[6:8], "big")) / 1000 if len(frame) >= 8 else 0.0
+    current_a = float(int.from_bytes(frame[4:6], "big")) / 1000 if len(frame) >= 6 else 0.0
+    capacity_mah = int.from_bytes(frame[10:12], "big") if len(frame) >= 12 else 0
+    temp_c = float(int.from_bytes(frame[8:10], "big")) / 1000 if len(frame) >= 10 else 0.0
+    time_seconds = int.from_bytes(frame[12:16], "big") if len(frame) >= 16 else 0
+    resistance_raw = int.from_bytes(frame[16:18], "big") if len(frame) >= 18 else 0
+    resistance_mohm: int | None = None if resistance_raw in (0, 1, 0xFFFF) else resistance_raw
+    led = 0
+    if 1 <= status_code <= 4:
+        led = 1
+    elif status_code >= 5:
+        led = 16
+    working = 1 <= status_code <= 4
+    return {
+        "slot": slot,
+        "battery_type_code": battery_type_code,
+        "battery_type": battery_type,
+        "mode_code": mode_code,
+        "mode": mode,
+        "count": 0,
+        "status_code": status_code,
+        "status": error or status,
+        "time_seconds": time_seconds,
+        "voltage_mv": int(voltage_v * 1000),
+        "current_ma": int(current_a * 1000),
+        "capacity_mah": capacity_mah,
+        "temperature": int(temp_c),
+        "internal_resistance_mohm": resistance_mohm,
+        "led": led,
+        "is_working": working,
+    }
+
+
 def mac_to_bytes(mac: str) -> bytes:
+
     parts = mac.replace("-", ":").split(":")
     if len(parts) != MAC_PARTS:
         raise ValueError(f"invalid MAC address: {mac!r}")

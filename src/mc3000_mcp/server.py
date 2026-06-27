@@ -12,6 +12,7 @@ from .transport import BleakMissingError, MC3000Client, find_and_connect
 
 _client: MC3000Client | None = None
 _session_log: list[dict[str, Any]] = []
+_g_client_is_mc5000: bool = False
 
 ToolHandler = Callable[[dict[str, Any]], Awaitable[Any]]
 
@@ -61,8 +62,13 @@ async def tool_disconnect(args: dict[str, Any]) -> Any:
 async def tool_status(args: dict[str, Any]) -> Any:
     client = _ensure_client()
     if "slot" in args and args["slot"] is not None:
-        return await client.poll_status(int(args["slot"]))
+        return await client.poll_status(int(args["slot"]), mc5000=_g_client_is_mc5000)
     return {"slots": await client.poll_all_status()}
+
+
+async def tool_mc5000_status(args: dict[str, Any]) -> Any:
+    client = _ensure_client()
+    return await client.poll_status(int(args["slot"]), mc5000=True)
 
 
 async def tool_start(args: dict[str, Any]) -> Any:
@@ -403,6 +409,15 @@ TOOLS: dict[str, tuple[str, dict[str, Any], ToolHandler]] = {
             "required": ["slot"],
         },
         tool_get_voltage_curve,
+    ),
+    "mc3000_mc5000_status": (
+        "Read slot status using MC5000 frame layout (opcode 0x91).",
+        {
+            "type": "object",
+            "properties": {"slot": {"type": "integer", "minimum": 0, "maximum": 3}},
+            "required": ["slot"],
+        },
+        tool_mc5000_status,
     ),
     "mc3000_build_profile": (
         "Build a 40-byte MC3000 profile/program frame without sending it.",

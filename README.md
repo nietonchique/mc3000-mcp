@@ -41,6 +41,12 @@ See `SECURITY.md` and `docs/safety-model.md` before using live hardware.
 - Companion `charger-agent` skill for Hermes Agent workflows.
 - Legacy `mc3000_*` low-level tools for protocol/debug work.
 
+### MC3000 vs MC5000 selection
+
+Model selection is based on the charger/protocol, not the inserted battery. If the physical charger is known, configure/use that model explicitly. If it is unknown, use only read-only probes: MC3000 status is opcode `0x55`, while MC5000 slot status is opcode `0x91` with a slot bitmask and a different response layout. Unknown devices must not receive profile writes or start commands.
+
+MC5000 support is being added conservatively from protocol facts in `kolinger/skyrc-mc3000`: status parsing can be implemented/read-only first; profile writes/start remain MC3000-only until verified on real MC5000 hardware.
+
 ## Install
 
 From source:
