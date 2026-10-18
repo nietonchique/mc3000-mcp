@@ -233,3 +233,22 @@ semantics/defaults matter. Physical slot 4 / API slot 3 accepted and ran these N
 - Cycle: `mode_code=4`, `mode=cycle`, `status=discharge`, `current_ma=200`.
 
 Each probe was stopped afterwards and verified as `status=standby`, `current_ma=0`.
+
+## Firmware dependency of the profile write
+
+Observed on a second MC3000 (version reply: firmware 1.13, hardware 1.3; later updated to firmware
+1.27 with SkyRC's updater), using the two-chunk `0x11` frames described above, with the NiMH
+voltage defaults filled in and the slot stopped first:
+
+- Firmware 1.13 never acknowledged the `0x11` write, sent either as write-without-response or as
+  write-with-response (both ATT writes succeeded). The `0xFE` stop on the same connection was
+  acknowledged. A USB read of the stored slot programs about 35 minutes later still showed the old
+  programs.
+- Firmware 1.27 acknowledges the write (`0f 11 <slot mask> f0 ff ff ...`, the same shape as the
+  `0xFE` stop ACK) and applies it. All four slots written with a NiMH Cycle profile (100 mA
+  discharge first) started in Cycle mode, discharging at about 100 mA.
+- On 1.27, `0x55` keeps reporting the slot's previous mode after an acknowledged write. The mode
+  changes only when the slot starts, so reading status right after a write can't confirm it;
+  starting the slot and checking mode and current can.
+
+Firmware versions between 1.13 and 1.27 were not tested.
