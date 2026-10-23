@@ -73,10 +73,10 @@ cd mc3000-mcp
 cargo install --path . --locked
 ```
 
-From crates.io (after the 0.2.0 release):
+From the released tag:
 
 ```bash
-cargo install mc3000-mcp --locked
+cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.0 --locked
 ```
 
 On Arch Linux:

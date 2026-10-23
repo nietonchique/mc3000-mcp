@@ -16,7 +16,7 @@ behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
 
 - The Rust binary is the only supported server path. The Python package, its `pyproject.toml`
   entry points, and all pip/pipx/uvx installation instructions are removed.
-- Install with `cargo install mc3000-mcp`, from a release archive, or via the AUR package
+- Install from the `v0.2.0` Git tag, from a release archive, or via the AUR package
   `mc3000-mcp`. Update MCP client configs to launch the `mc3000-mcp` binary instead of the Python
   module; see the README for examples.
 - The server version now comes from the crate version instead of a hardcoded Python constant.
