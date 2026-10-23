@@ -78,8 +78,9 @@ jobs:
           echo "$pack_log"
           mcpb_sha256=$(printf '%s\n' "$pack_log" | awk 'NR==1 {print $1}')
           mcpb_path=$(printf '%s\n' "$pack_log" | awk 'NR==1 {print $2}')
-          b2sum "$mcpb_path" > "${mcpb_path}.b2"
-          mcpb_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$(basename "$mcpb_path")"
+          mcpb_name=$(basename "$mcpb_path")
+          ( cd dist && b2sum "$mcpb_name" > "${mcpb_name}.b2" )
+          mcpb_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${mcpb_name}"
           bash packaging/mcpb/render-server-json.sh packaging/mcpb/server.json.template "$mcpb_url" "$mcpb_sha256" dist/server.json
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
