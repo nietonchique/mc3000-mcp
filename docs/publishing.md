@@ -27,26 +27,29 @@ They are advertised together but installed through different mechanisms.
 
 ```bash
 # MCP server
-cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.1 --locked
-hermes mcp add mc3000 --command mc3000-mcp
-hermes mcp test mc3000
+cargo install mc3000-mcp --locked
+
+# Any MCP client
+mc3000-mcp
 
 # Arch Linux
 paru -S mc3000-mcp
 
-# Companion skill
+# Companion Agent Skill for Codex; replace the destination for another client
+mkdir -p ~/.codex/skills
+curl -fsSL \
+  https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.1/mc3000-mcp-skill-v0.2.1.tar.gz \
+  | tar -xz -C ~/.codex/skills
+```
+
+Hermes users may alternatively run:
+
+```bash
+hermes mcp add mc3000 --command mc3000-mcp
 hermes skills install \
   https://raw.githubusercontent.com/nietonchique/mc3000-mcp/main/skill/SKILL.md \
   --name charger-agent
 ```
-
-Users can then start Hermes with:
-
-```bash
-hermes -s charger-agent
-```
-
-or load the skill in-session with `/skill charger-agent`.
 
 ## Release checklist
 
@@ -93,10 +96,11 @@ or load the skill in-session with `/skill charger-agent`.
     - build in a clean chroot and run `namcap`;
     - install the built package and smoke-test `mc3000-mcp --version` plus `mc3000-mcp --backend fake`;
     - commit `PKGBUILD` and `.SRCINFO` to the AUR `master` branch and push.
-11. Publish/list the companion skill:
-    - the raw install URL is already usable;
-    - if publishing to a Hermes skill registry, run that registry's current `hermes skills publish`
-      flow with `skill/` as the source bundle when supported.
+11. Publish/list the companion Agent Skill:
+    - verify the `mc3000-mcp-skill-<version>.tar.gz` release asset and its BLAKE2b checksum;
+    - clients install the folder using their normal SKILL.md directory, for example
+      `~/.codex/skills`, `~/.omp/agent/skills`, or `~/.claude/skills`;
+    - the `hermes skills install` command remains optional for Hermes users.
 
 ## Do not publish yet if
 
