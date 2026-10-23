@@ -52,10 +52,10 @@ proptest = "1.6"
 tokio = { version = "1.45", features = ["test-util"] }
 
 [lints.rust]
-future-incompatible = "deny"
+future_incompatible = "deny"
 missing_docs = "warn"
-nonstandard-style = "deny"
-rust-2018-idioms = "deny"
+nonstandard_style = "deny"
+rust_2018_idioms = "deny"
 
 [lints.clippy]
 all = { level = "deny", priority = 10 }

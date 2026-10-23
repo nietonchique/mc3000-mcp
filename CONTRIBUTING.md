@@ -7,6 +7,8 @@ fail-closed behavior matter more than features.
 
 - Rust stable via [rustup](https://rustup.rs); the MSRV is **1.88** (see `Cargo.toml` and
   `clippy.toml`). CI tests both stable and 1.88.
+- Linux builds need `pkg-config` and D-Bus development headers (`libdbus-1-dev` on Debian/Ubuntu,
+  `dbus-devel` on Fedora, provided by `base-devel`/`dbus` on Arch). Runtime BLE uses BlueZ.
 - Commit `Cargo.lock` (this repository ships a binary).
 - No hardware is required for development: use the fake backend (`--backend fake`) for all local
   testing.
