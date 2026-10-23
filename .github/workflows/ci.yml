@@ -2,35 +2,205 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  test:
+  fmt:
+    name: rustfmt
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12', '3.13']
+    env:
+      RUSTUP_TOOLCHAIN: stable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install package
-        run: python -m pip install -e '.[test]'
-      - name: Ruff lint (all rules)
-        run: python -m ruff check .
-      - name: Mypy strict types
-        run: python -m mypy
-      - name: Bandit security scan
-        run: python -m bandit -q -c pyproject.toml -r src tests
-      - name: Dependency vulnerability audit
-        run: python -m pip_audit --progress-spinner off --strict .
-      - name: Run tests
-        run: python -m pytest -q
-      - name: Smoke-test MCP stdio
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install libdbus-1-dev and pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+  test:
+    name: test (stable)
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install libdbus-1-dev and pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: cargo test --all-features --locked
+
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: stable
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install libdbus-1-dev and pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: cargo doc --all-features --no-deps --locked
+
+  msrv:
+    name: test (MSRV 1.88)
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.88.0"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install libdbus-1-dev and pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: "1.88.0"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: cargo test --all-features --locked
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check
+
+  smoke:
+    name: stdio smoke (fake backend)
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Install libdbus-1-dev and pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - name: Smoke-test MCP stdio against the fake backend
         run: |
-          python -m mc3000_mcp.server <<'EOF'
-          {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}
-          {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-          {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mc3000_build_profile","arguments":{"slot_mask":1}}}
+          set -euo pipefail
+          cargo_version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          cat > /tmp/smoke-requests.ndjson <<'EOF'
+          {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"0.0.0"}}}
+          {"jsonrpc":"2.0","method":"notifications/initialized"}
+          {"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}
+          {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"mc3000_build_profile","arguments":{"slot_mask":1}}}
           EOF
+          cargo run --quiet --locked -- --backend fake < /tmp/smoke-requests.ndjson > /tmp/smoke-responses.ndjson
+          python3 - "$cargo_version" <<'PYEOF'
+          import json
+          import re
+          import sys
+
+          cargo_version, responses_path = sys.argv[1], "/tmp/smoke-responses.ndjson"
+          expected_tools = {
+              "mc3000_scan", "mc3000_connect", "mc3000_disconnect", "mc3000_status",
+              "mc3000_start", "mc3000_stop", "mc3000_get_version", "mc3000_get_basic",
+              "mc3000_set_basic", "mc3000_get_voltage_curve", "mc3000_mc5000_status",
+              "mc3000_build_profile", "mc3000_apply_profile", "mc3000_send_raw",
+              "charger.scan_devices", "charger.connect", "charger.get_status",
+              "charger.read_slots", "charger.get_voltage_curve", "charger.export_voltage_curve",
+              "charger.list_profiles", "charger.validate_profile", "charger.apply_profile",
+              "charger.start", "charger.stop_slot", "charger.stop_all",
+              "charger.export_session_log",
+          }
+
+          responses = {}
+          with open(responses_path, encoding="utf-8") as fh:
+              for line in fh:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  message = json.loads(line)
+                  if message.get("id") is not None:
+                      responses[message["id"]] = message
+
+          assert 1 in responses, "no initialize response"
+          init = responses[1].get("result") or {}
+          server_version = init.get("serverInfo", {}).get("version")
+          assert server_version == cargo_version, (
+              f"serverInfo.version {server_version!r} != Cargo.toml {cargo_version!r}")
+
+          assert 3 in responses, "no tools/list response"
+          assert "error" not in responses[3], f"tools/list errored: {responses[3]['error']}"
+          names = {tool["name"] for tool in responses[3]["result"]["tools"]}
+          assert len(names) == 27, f"expected 27 unique tool names, got {len(names)}"
+          assert names == expected_tools, (
+              f"tool mismatch: missing={sorted(expected_tools - names)} "
+              f"extra={sorted(names - expected_tools)}")
+
+          assert 4 in responses, "no tools/call response"
+          assert "error" not in responses[4], f"tools/call errored: {responses[4]['error']}"
+          text = responses[4]["result"]["content"][0]["text"]
+          payload = json.loads(text)
+          for key, length in (("profile_hex", 80), ("chunk_1_hex", 40), ("chunk_2_hex", 40)):
+              value = payload.get(key, "")
+              assert re.fullmatch(rf"[0-9A-F]{{{length}}}", value), (
+                  f"{key} must be exactly {length} uppercase hex chars, got {value!r}")
+
+          print("stdio smoke: initialize, tools/list, mc3000_build_profile OK")
+          PYEOF

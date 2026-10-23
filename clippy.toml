@@ -1,0 +1,2 @@
+# Minimum supported Rust version; keep in sync with `rust-version` in Cargo.toml.
+msrv = "1.88"

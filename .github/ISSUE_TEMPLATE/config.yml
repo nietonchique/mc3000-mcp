@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security or hardware-safety issue
+    url: https://github.com/nietonchique/mc3000-mcp/blob/main/SECURITY.md
+    about: Report privately; do not open a public issue for vulnerabilities or unsafe hardware behavior.

@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a problem with mc3000-mcp.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please never paste stdout protocol traffic;
+        logs belong on stderr and secret material (confirmation tokens, addresses) should be
+        redacted.
+  - type: checkboxes
+    id: duplicates
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `mc3000-mcp --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - Real BLE (powered charger)
+        - Fake backend (`--backend fake`)
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: charger
+    attributes:
+      label: Charger details
+      description: Model, firmware/hardware versions, and connection state (read from the charger info, not the label).
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: stderr output with tokens and identifiers redacted. Do not paste stdout MCP traffic.
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      description: Did this bug involve a write, profile start, or raw command on real hardware?
+      options:
+        - label: This report involves a write/start operation on real hardware.
+        - label: The charger behaved as the tool reported (no mismatch between reported and actual state).

@@ -6,46 +6,62 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-green.svg)](server.json)
 
-Safe MCP server and companion agent skill for monitoring and controlling SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy.
+Safe MCP server and companion agent skill for monitoring and controlling SKYRC
+MC3000-compatible battery chargers over Bluetooth Low Energy.
 
-The BLE protocol was recovered from the official Android app (`MC3000` 4.1.2). The production `charger.*` MCP tools expose safe charger operations: inspect slot state, read charger-stored voltage curves, validate battery profiles, dry-run profile writes, require explicit confirmation for live writes/starts, and provide emergency stop tools.
+The Rust server exposes `charger.*` production tools for safe charger operations: inspect slot state,
+read charger-stored voltage curves, validate battery profiles, dry-run profile writes, require explicit
+confirmation for live writes and starts, and stop slots or the whole charger immediately. Legacy
+`mc3000_*` tools remain for low-level protocol and debugging work and follow the same confirmation
+policy for non-emergency writes.
 
-Status: alpha. Protocol framing, MCP stdio behavior, safety validation, and fake-client flows are tested. Live testing has confirmed MC3000 BLE operation on NiMH Charge, Discharge, Refresh, Break-in, and Cycle modes. Hardware behavior still depends on charger firmware/revision and BLE availability.
+Status: alpha. Protocol framing, profile construction, safety validation, notification parsing, request
+sequencing, and fake-client flows are tested automatically. Live hardware checks have confirmed MC3000
+BLE operation on NiMH Charge, Discharge, Refresh, Break-in, and Cycle modes. Hardware behavior still
+depends on charger firmware/revision and BLE availability.
 
 ## Safety warning
 
-This software can control a physical battery charger. Wrong chemistry, current, voltage, or slot selection can damage cells or create a fire risk.
+This software can control a physical battery charger. Wrong chemistry, current, voltage, or slot
+selection can damage cells or create a fire risk.
 
-- The LLM/agent is not the safety layer; limits and dangerous-action gates are enforced in the MCP server.
-- Verify battery chemistry, capacity, cell count, voltage/cutoff, temperature policy, and slot before applying any profile.
-- API slot numbers are zero-based (`0..3`), matching Android app internals. Physical slot 1 is API slot `0`.
+- The LLM/agent is not the safety layer. Limits and dangerous-action gates are enforced in the server.
+- Verify battery chemistry, capacity, cell count, voltage/cutoff, temperature policy, and slot before
+  applying a profile.
+- API slot numbers are zero-based (`0..3`), matching Android app internals. Physical slot 1 is API slot
+  `0`.
 - `charger.apply_profile` is dry-run by default. Live writes require `confirmation_token=APPLY_PROFILE_SLOT_<slot>`.
 - `charger.start` requires a separate `confirmation_token=START_SLOT_<slot>`.
+- Emergency stop tools are intentionally tokenless: use them immediately when anything looks wrong.
 - Keep the charger in sight while testing. Do not expose this MCP server to untrusted clients.
-- Factory/calibration reset opcodes are documented for research but intentionally not exposed as production tools.
+- Factory and calibration reset opcodes are documented for research but are blocked by the server.
 
-See `SECURITY.md` and `docs/safety-model.md` before using live hardware.
+Read `SECURITY.md` and `docs/safety-model.md` before using live hardware.
 
 ## Features
 
-- BLE discovery using the same advertised names as the Android app.
-- Connect/disconnect over BLE FFE0/FFE1.
+- BLE discovery using the advertised names recognized by the official Android app.
+- Connect and disconnect over the Nordic-UART-like FFE0/FFE1 GATT layout.
 - Read one slot or all four slots.
-- Parse slot status: chemistry, mode, status, time, voltage, current, capacity, temperature, internal resistance, LED state.
+- Parse slot status: chemistry, mode, status, time, voltage, current, capacity, temperature, internal
+  resistance, and LED state.
 - Read firmware/hardware version and basic device settings.
-- Read the app-compatible charger-stored voltage time-series (`0x56`) and export it as JSON/CSV.
-- Validate battery profiles against conservative chemistry/device limits.
-- Build/apply 40-byte MC3000 profiles with chemistry and mode-aware defaults.
-- Dry-run-by-default production tools plus explicit confirmation tokens for writes/starts.
-- Emergency stop for one slot or all slots.
+- Read and export the app-compatible charger-stored voltage time-series (`0x56`) as JSON or CSV.
+- Validate battery profiles against conservative chemistry/device limits before any backend call.
+- Build and apply 40-byte MC3000 profiles with chemistry- and mode-aware defaults.
+- Serialized device requests and bounded notification queues, so concurrent polls cannot consume a
+  profile acknowledgement or grow memory without bound.
+- Explicit charger-model state: MC5000 and unknown devices are read-only.
+- Deterministic fake backend for hardware-free development and MCP client testing.
 - Companion `charger-agent` skill for Hermes Agent workflows.
-- Legacy `mc3000_*` low-level tools for protocol/debug work.
+- Legacy `mc3000_*` low-level tools for protocol/debug work, with the same write confirmation policy.
 
 ### MC3000 vs MC5000 selection
 
-Model selection is based on the charger/protocol, not the inserted battery. If the physical charger is known, configure/use that model explicitly. If it is unknown, use only read-only probes: MC3000 status is opcode `0x55`, while MC5000 slot status is opcode `0x91` with a slot bitmask and a different response layout. Unknown devices must not receive profile writes or start commands.
-
-MC5000 support is being added conservatively from protocol facts in `kolinger/skyrc-mc3000`: status parsing can be implemented/read-only first; profile writes/start remain MC3000-only until verified on real MC5000 hardware.
+Model selection is based on the charger, not the inserted battery. Select the model explicitly when
+connecting; the default is MC3000. MC5000 exposes read-only slot status through opcode `0x91`. Profile
+writes and start operations remain MC3000-only until they are verified on real MC5000 hardware. Unknown
+devices must not receive profile writes or start commands.
 
 ## Install
 
@@ -54,51 +70,104 @@ From source:
 ```bash
 git clone https://github.com/nietonchique/mc3000-mcp.git
 cd mc3000-mcp
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -e '.[test]'
+cargo install --path . --locked
 ```
 
-Once published to PyPI, install/run with one of:
+From crates.io (after the 0.2.0 release):
 
 ```bash
-pipx install mc3000-mcp
-pipx run mc3000-mcp
-# or
-uvx mc3000-mcp
+cargo install mc3000-mcp --locked
 ```
 
-Linux BLE access requires BlueZ/DBus. Confirm the adapter is powered:
+On Arch Linux:
+
+```bash
+paru -S mc3000-mcp
+```
+
+The official MCP Registry distribution is an MCPB bundle attached to each GitHub release. Download the
+Linux x86_64 `.mcpb` file and install it in an MCPB-compatible client, or use the native binary
+installation above.
+
+Linux BLE access requires BlueZ over D-Bus. Confirm that the adapter is powered:
 
 ```bash
 bluetoothctl show
 ```
 
-If scans return no devices, make sure the charger is powered on, not connected to the phone app, and close enough to the PC BLE adapter.
+If scanning reports a powered-off adapter:
+
+```bash
+sudo rfkill unblock bluetooth
+bluetoothctl power on
+```
+
+If scans return no devices, make sure the charger is powered on, is not connected to the phone app, and
+is close enough to the computer's BLE adapter.
+
+## Command line
+
+Starting without a subcommand runs the MCP stdio server:
+
+```bash
+mc3000-mcp
+mc3000-mcp --backend fake --help
+```
+
+Read-only hardware diagnostics are available directly:
+
+```bash
+mc3000-mcp scan --timeout 8
+mc3000-mcp status --address F8:2E:0C:B8:A6:15
+```
+
+`scan` lists charger-like devices. `status` connects to an address (or the first discovered charger),
+reads all four slots, prints JSON, and disconnects. The CLI never writes a profile, changes settings, or
+starts a slot.
 
 ## Configure as an MCP server
 
-Local source checkout:
+Native binary:
 
-```bash
-hermes mcp add mc3000 --command "$(pwd)/.venv/bin/mc3000-mcp"
-hermes mcp test mc3000
+```json
+{
+  "mcpServers": {
+    "mc3000": {
+      "command": "mc3000-mcp",
+      "args": []
+    }
+  }
+}
 ```
 
-Published package / pipx:
+Hardware-free client setup:
 
-```bash
-hermes mcp add mc3000 --command "pipx run mc3000-mcp"
-hermes mcp test mc3000
+```json
+{
+  "mcpServers": {
+    "mc3000": {
+      "command": "mc3000-mcp",
+      "args": ["--backend", "fake"]
+    }
+  }
+}
 ```
 
-Common client config examples are in `examples/claude-desktop.json`, `examples/codex.json`, and `examples/cursor.json`.
+Client-specific examples are in `examples/claude-desktop.json`, `examples/codex.json`, and
+`examples/cursor.json`.
+
+For Hermes:
+
+```bash
+hermes mcp add mc3000 --command mc3000-mcp
+hermes mcp test mc3000
+```
 
 ## Install the companion Hermes skill
 
-The MCP server enforces safety. The skill teaches the agent the safe workflow: ask for missing battery facts, choose conservative profiles, show dry-run summaries, require explicit confirmation, monitor after start, and stop on unsafe state.
-
-Install from this repository:
+The MCP server enforces safety. The skill teaches the agent the safe workflow: ask for missing battery
+facts, choose conservative profiles, show dry-run summaries, require explicit confirmation, monitor after
+start, and stop on unsafe state.
 
 ```bash
 hermes skills install \
@@ -114,29 +183,31 @@ hermes -s charger-agent
 # /skill charger-agent
 ```
 
-The raw `SKILL.md` is intentionally self-contained. Additional repository files under `skill/profiles/` and `skill/checklists/` are examples/checklists for humans and future bundle-style registries; the server-side safety rules remain in `mc3000_mcp.safety`.
+The raw `SKILL.md` is intentionally self-contained. Files under `skill/profiles/` and `skill/checklists/`
+are examples for humans and future bundle-style registries; server-side safety rules live in the Rust
+`safety` module.
 
 ## Production MCP tools
-
-Preferred tools are namespaced as `charger.*` and enforce dry-run/confirmation on dangerous actions:
 
 | Tool | Purpose |
 | --- | --- |
 | `charger.scan_devices` | Read-only BLE scan. |
-| `charger.connect` | Connect to a selected device. |
-| `charger.get_status` | Read current charger status. |
+| `charger.connect` | Connect to a selected device with an explicit model. |
+| `charger.get_status` | Read current charger status for all slots. |
 | `charger.read_slots` | Read one slot or all slots. |
-| `charger.get_voltage_curve` | Read charger-stored voltage time-series (`0x56`), app-compatible and no polling. |
-| `charger.export_voltage_curve` | Export that voltage curve as JSON or CSV. |
+| `charger.get_voltage_curve` | Read the charger-stored voltage time-series (`0x56`). |
+| `charger.export_voltage_curve` | Export that curve as JSON or CSV. |
 | `charger.list_profiles` | List bundled example profiles. |
 | `charger.validate_profile` | Validate a battery profile against enforced limits. |
 | `charger.apply_profile` | Validate and apply a profile; dry-run by default, live write requires `APPLY_PROFILE_SLOT_<slot>`. |
 | `charger.start` | Start a slot; requires `START_SLOT_<slot>`. |
 | `charger.stop_slot` | Emergency stop for one slot. |
 | `charger.stop_all` | Emergency stop for all slots. |
-| `charger.export_session_log` | Export redacted in-memory command/session log. |
+| `charger.export_session_log` | Export the bounded, redacted in-memory audit log. |
 
-Legacy `mc3000_*` tools remain for low-level protocol work and backwards compatibility.
+Legacy `mc3000_*` tools cover the same protocol surface for debugging. Non-emergency legacy writes
+require the same style of explicit confirmation token; raw writes additionally block factory and
+calibration restore opcodes.
 
 ## Safe workflow examples
 
@@ -200,28 +271,24 @@ More examples: `docs/examples.md`.
 
 ## Voltage curves
 
-The Android app's graph is a voltage curve, not a generic telemetry logger. It requests opcode `0x56`, receives a charger-stored sample interval plus up to 120 millivolt points, and plots/exports time vs voltage. Current, capacity, temperature, and resistance are status fields, not historical curve series.
-
-This project exposes that same data as:
-
-- `mc3000_get_voltage_curve` — low-level protocol/debug tool.
-- `charger.get_voltage_curve` — production-safe JSON time-series.
-- `charger.export_voltage_curve` — JSON/CSV export.
-
-No background polling is required for the app-compatible voltage curve.
+The Android app graph is a voltage curve, not a generic telemetry logger. The server requests opcode
+`0x56`, receives the charger-stored sample interval plus up to 120 millivolt points, and exports time
+versus voltage. Current, capacity, temperature, and resistance are status fields, not historical curve
+series. Fragmented notifications are reassembled into the complete 245-byte curve before parsing.
 
 ## Documentation map
 
 - `SECURITY.md` — hardware safety and disclosure policy.
 - `docs/supported-devices.md` — confirmed devices and compatibility policy.
-- `docs/safety-model.md` — what is enforced in code vs guidance.
+- `docs/safety-model.md` — what is enforced in code versus guidance.
 - `docs/profile-schema.md` — battery profile schema and examples.
 - `docs/ble-protocol-notes.md` — GATT/framing/opcode notes.
 - `docs/reverse-notes.md` — detailed reverse-engineering notes.
 - `docs/examples.md` — safe dry-run/apply/start/stop/curve examples.
-- `docs/publishing.md` — release/listing/skill distribution checklist.
+- `docs/publishing.md` — release, registry, skill, and AUR checklist.
+- `docs/rust-rewrite-plan.md` — architecture and acceptance plan for the Rust rewrite.
 - `skill/SKILL.md` — companion agent playbook.
-- `server.json` — draft Official MCP Registry metadata.
+- `server.json` — Official MCP Registry metadata.
 
 ## Protocol short version
 
@@ -231,39 +298,22 @@ No background polling is required for the app-compatible voltage curve.
 - Normal command: 20 bytes, checksum in byte 19.
 - Profile command (`0x11`): 40 bytes, checksum in byte 39, written as two 20-byte chunks.
 - Voltage curve command (`0x56`): charger-stored voltage curve for a zero-based slot.
-- Status/curve slot args are zero-based; start/stop use slot bitmasks.
+- Status/curve slot arguments are zero-based; start/stop use slot bitmasks.
 
 ## Development
 
 ```bash
-python -m pip install -e '.[test]'
-python -m pytest -q
-python -m ruff check .
-python -m ruff format --check .
-python -m mypy src tests
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --all-features --locked
+cargo doc --all-features --no-deps --locked
+cargo audit
+cargo deny check
 ```
 
-Local MCP stdio smoke test without hardware:
-
-```bash
-python -m mc3000_mcp.server <<'EOF'
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"charger.list_profiles","arguments":{}}}
-EOF
-```
-
-Build/publish checks:
-
-```bash
-python -m build
-python -m twine check dist/*
-```
-
-## Repository hygiene
-
-The repository intentionally does not include the APK, decompiled Java, local reverse-engineering scratch outputs, virtualenvs, or build caches. Those are excluded by `.gitignore`.
+The fake backend keeps hardware out of ordinary development and CI. See `CONTRIBUTING.md` for the full
+workflow, including the rule that automated tests never write to or start real hardware.
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+Apache License 2.0. See [LICENSE](LICENSE).
