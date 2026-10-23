@@ -1,6 +1,6 @@
 # Profile schema
 
-The canonical JSON Schema is exposed at MCP resource `charger://profile-schema` and implemented in `mc3000_mcp.safety.PROFILE_SCHEMA`.
+The canonical JSON Schema is exposed at MCP resource `charger://profile-schema` and implemented in the Rust `mc3000_mcp::safety` module.
 
 Profiles describe battery facts and intended operation. They are validated before any live write. The MCP server, not the LLM, enforces hard limits.
 

@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest an improvement to mc3000-mcp.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features that relax hardware safety (chemistry detection, looser limits, implicit writes)
+        are out of scope by design; see the README safety section.
+  - type: checkboxes
+    id: duplicates
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what blocks you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should the tool do? Include example tool calls or CLI output if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety impact
+      description: Does the proposal touch write/start behavior?
+      options:
+        - Read-only behavior only
+        - Affects write/start paths (needs an explicit confirmation design)
+        - Unsure
+    validations:
+      required: true

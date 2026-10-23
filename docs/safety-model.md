@@ -6,12 +6,15 @@ Safety is enforced in code first and documented second. Agent instructions are n
 
 - Profile validation requires explicit chemistry, capacity, cell count, operation, currents, cutoffs, temperature policy, profile id, source, and risk level.
 - Unsupported chemistry or operation is rejected.
-- Chemistry-specific conservative current, voltage, discharge cutoff, cell-count, and temperature limits are enforced in `mc3000_mcp.safety`.
+- Chemistry-specific conservative current, voltage, discharge cutoff, cell-count, and temperature limits are enforced in the Rust `mc3000_mcp::safety` module.
 - `charger.apply_profile` is dry-run by default.
 - Live profile writes require `confirmation_token=APPLY_PROFILE_SLOT_<slot>`.
 - `charger.start` requires `confirmation_token=START_SLOT_<slot>`.
-- Emergency stop does not depend on profile validation.
-- Session logs redact device addresses.
+- Every non-emergency legacy write/start path requires the same style of explicit confirmation token.
+- Raw writes are never interpreted as profiles, require a separate raw-command confirmation, and block factory/calibration restore opcodes.
+- Emergency stop does not depend on profile validation or a token.
+- MC5000 and unknown charger models are read-only; write-class commands are refused before any byte is sent.
+- Session logs redact device addresses and confirmation tokens and are bounded in memory.
 - App-compatible voltage-curve reads are read-only and do not require dangerous-action confirmation.
 
 ## Companion skill

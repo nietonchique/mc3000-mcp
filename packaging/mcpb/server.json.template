@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.nietonchique/mc3000-mcp",
+  "title": "MC3000 Charger",
+  "description": "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy.",
+  "repository": {
+    "url": "https://github.com/nietonchique/mc3000-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "__MCPB_URL__",
+      "version": "0.2.0",
+      "fileSha256": "__MCPB_SHA256__",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

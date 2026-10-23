@@ -1,0 +1,146 @@
+{
+  "manifest_version": "0.3",
+  "name": "mc3000-mcp",
+  "display_name": "MC3000 Charger",
+  "version": "0.2.0",
+  "description": "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy.",
+  "author": {
+    "name": "nietonchique"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nietonchique/mc3000-mcp"
+  },
+  "license": "Apache-2.0",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/mc3000-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/mc3000-mcp",
+      "args": []
+    }
+  },
+  "tools": [
+    {
+      "name": "mc3000_scan",
+      "description": "Scan BLE devices and return devices whose advertised name matches the official MC3000 app filters."
+    },
+    {
+      "name": "mc3000_connect",
+      "description": "Connect to MC3000 by BLE address, or scan and connect to the first matching charger if address is omitted."
+    },
+    {
+      "name": "mc3000_disconnect",
+      "description": "Disconnect from charger."
+    },
+    {
+      "name": "mc3000_status",
+      "description": "Poll slot status. Slot is zero-based 0..3; omit slot to poll all four."
+    },
+    {
+      "name": "mc3000_start",
+      "description": "Start charging/program on a zero-based slot 0..3."
+    },
+    {
+      "name": "mc3000_stop",
+      "description": "Stop a zero-based slot 0..3."
+    },
+    {
+      "name": "mc3000_get_version",
+      "description": "Read firmware/hardware version."
+    },
+    {
+      "name": "mc3000_get_basic",
+      "description": "Read basic device settings."
+    },
+    {
+      "name": "mc3000_set_basic",
+      "description": "Set basic device settings."
+    },
+    {
+      "name": "mc3000_get_voltage_curve",
+      "description": "Read voltage curve for a zero-based slot. Response is parsed into millivolt points."
+    },
+    {
+      "name": "mc3000_mc5000_status",
+      "description": "Read slot status using MC5000 frame layout (opcode 0x91)."
+    },
+    {
+      "name": "mc3000_build_profile",
+      "description": "Build a 40-byte MC3000 profile/program frame without sending it."
+    },
+    {
+      "name": "mc3000_apply_profile",
+      "description": "Apply a profile/program. Pass profile_hex from mc3000_build_profile or pass the same profile fields directly. Optionally start selected slots."
+    },
+    {
+      "name": "mc3000_send_raw",
+      "description": "Send a raw hex frame. Escape hatch for protocol experiments."
+    },
+    {
+      "name": "charger.scan_devices",
+      "description": "Read-only BLE scan for supported chargers."
+    },
+    {
+      "name": "charger.connect",
+      "description": "Connect to a selected charger. Prefer an explicit address from scan_devices."
+    },
+    {
+      "name": "charger.get_status",
+      "description": "Read current charger status for all slots."
+    },
+    {
+      "name": "charger.read_slots",
+      "description": "Read one slot or all slot statuses. Slot is zero-based 0..3."
+    },
+    {
+      "name": "charger.get_voltage_curve",
+      "description": "Read the charger-stored app-style voltage time-series for one slot. No polling."
+    },
+    {
+      "name": "charger.export_voltage_curve",
+      "description": "Export the charger-stored voltage curve as JSON or CSV."
+    },
+    {
+      "name": "charger.list_profiles",
+      "description": "List bundled safe example profiles."
+    },
+    {
+      "name": "charger.validate_profile",
+      "description": "Validate a battery profile against enforced chemistry/device/safety limits."
+    },
+    {
+      "name": "charger.apply_profile",
+      "description": "Validate and apply a profile to a slot. Dry-run is default; live write requires token."
+    },
+    {
+      "name": "charger.start",
+      "description": "Start the already-applied operation on a slot. Requires START_SLOT_<slot> token."
+    },
+    {
+      "name": "charger.stop_slot",
+      "description": "Emergency stop for one slot; bypasses profile validation."
+    },
+    {
+      "name": "charger.stop_all",
+      "description": "Emergency stop for all slots; bypasses profile validation."
+    },
+    {
+      "name": "charger.export_session_log",
+      "description": "Export in-memory session log with redacted device identifiers."
+    }
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "platforms": [
+      "linux"
+    ]
+  },
+  "keywords": [
+    "mcp",
+    "bluetooth",
+    "ble",
+    "charger",
+    "battery"
+  ]
+}

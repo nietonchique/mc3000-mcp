@@ -1,0 +1,70 @@
+[package]
+name = "mc3000-mcp"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy"
+license = "Apache-2.0"
+repository = "https://github.com/nietonchique/mc3000-mcp"
+homepage = "https://github.com/nietonchique/mc3000-mcp"
+documentation = "https://docs.rs/mc3000-mcp"
+readme = "README.md"
+keywords = ["mcp", "bluetooth", "ble", "charger", "battery"]
+categories = ["hardware-support", "command-line-utilities"]
+include = [
+  "src/**/*.rs",
+  "tests/**/*.rs",
+  "README.md",
+  "LICENSE",
+  "SECURITY.md",
+  "docs/*.md",
+  "skill/SKILL.md",
+  "skill/checklists/*.md",
+  "skill/profiles/*.json",
+  "examples/*.json",
+]
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+btleplug = "0.13"
+clap = { version = "4.5", features = ["derive"] }
+csv = "1.3"
+futures = "0.3"
+hex = "0.4"
+rmcp = { version = "3.7", features = [
+  "server",
+  "transport-io",
+  "client",
+  "transport-child-process",
+] }
+schemars = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1.45", features = ["io-std", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1.16", features = ["v4"] }
+
+[dev-dependencies]
+proptest = "1.6"
+tokio = { version = "1.45", features = ["test-util"] }
+
+[lints.rust]
+future-incompatible = "deny"
+missing_docs = "warn"
+nonstandard-style = "deny"
+rust-2018-idioms = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = 10 }
+pedantic = { level = "warn", priority = 3 }
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

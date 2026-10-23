@@ -8,19 +8,22 @@
     "url": "https://github.com/nietonchique/mc3000-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
-  "packages": [
-    {
-      "registryType": "pypi",
-      "identifier": "mc3000-mcp",
-      "version": "0.1.1",
-      "transport": {
-        "type": "stdio"
-      },
-      "runtimeHint": "pipx run mc3000-mcp"
-    }
-  ],
+  "version": "0.2.0",
   "tools": [
+    "mc3000_scan",
+    "mc3000_connect",
+    "mc3000_disconnect",
+    "mc3000_status",
+    "mc3000_start",
+    "mc3000_stop",
+    "mc3000_get_version",
+    "mc3000_get_basic",
+    "mc3000_set_basic",
+    "mc3000_get_voltage_curve",
+    "mc3000_mc5000_status",
+    "mc3000_build_profile",
+    "mc3000_apply_profile",
+    "mc3000_send_raw",
     "charger.scan_devices",
     "charger.connect",
     "charger.get_status",

@@ -1,0 +1,41 @@
+# cargo-deny configuration. Checked in CI via `cargo deny check`.
+
+[graph]
+# Check the same dependency graph the test suite builds.
+all-features = true
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Unlicense",
+  "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = []
+
+[advisories]
+version = 2
+# cargo-deny 0.20 denies vulnerabilities and reports unmaintained/unsound/yanked
+# advisories by default; explicit per-kind levels were removed from the schema.
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
