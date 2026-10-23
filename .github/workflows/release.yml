@@ -86,6 +86,9 @@ jobs:
           tar -czf "dist/${name}.tar.gz" -C dist "${name}"
           ( cd dist && b2sum "${name}.tar.gz" > "${name}.tar.gz.b2" )
           rm -rf "dist/${name}"
+          source_name="mc3000-mcp-${version}-source.tar.gz"
+          git archive --format=tar.gz --prefix="mc3000-mcp-${version}/" -o "dist/${source_name}" HEAD
+          ( cd dist && b2sum "${source_name}" > "${source_name}.b2" )
 
       - name: Pack MCPB bundle and render server.json
         run: |
