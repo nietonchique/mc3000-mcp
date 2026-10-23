@@ -686,7 +686,7 @@ async fn charger_apply_profile_missing_wrong_correct_token() {
         "dangerous write requires confirmation_token=APPLY_PROFILE_SLOT_3",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     call_err(
         &client,
@@ -700,7 +700,7 @@ async fn charger_apply_profile_missing_wrong_correct_token() {
         "dangerous write requires confirmation_token=APPLY_PROFILE_SLOT_3",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     let payload = call_ok(
         &client,
@@ -748,7 +748,7 @@ async fn charger_apply_profile_invalid_validation_returns_result() {
             .is_some_and(|errors| !errors.is_empty()),
         "validation errors must be listed: {payload}"
     );
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 }
 
 #[tokio::test]
@@ -769,7 +769,7 @@ async fn charger_start_missing_wrong_correct_token() {
         "starting hardware requires confirmation_token=START_SLOT_3",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     let payload = call_ok(
         &client,
@@ -805,7 +805,7 @@ async fn legacy_start_and_set_basic_require_tokens() {
         "starting hardware requires confirmation_token=START_SLOT_1",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     let payload = call_ok(
         &client,
@@ -854,7 +854,7 @@ async fn legacy_apply_profile_single_slot_dry_run_and_token() {
     .await;
     assert_eq!(payload["dry_run"], json!(true));
     assert_eq!(payload["applied"], json!(false));
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     // start=true is rejected in favor of the separate start tool.
     call_err(
@@ -889,7 +889,7 @@ async fn legacy_apply_profile_single_slot_dry_run_and_token() {
         "dangerous write requires confirmation_token=APPLY_PROFILE_SLOT_0",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     let payload = call_ok(
         &client,
@@ -956,7 +956,7 @@ async fn send_raw_requires_token_and_blocks_restore() {
         "raw write requires confirmation_token=SEND_RAW",
     )
     .await;
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 
     let payload = call_ok(
         &client,
@@ -1506,5 +1506,5 @@ async fn dry_run_apply_via_raw_safety_fields() {
         2600
     );
     assert_eq!(payload["applied"], json!(false));
-    assert!(fake.writes().is_empty());
+    assert_eq!(fake.writes(), Vec::<Vec<u8>>::new());
 }

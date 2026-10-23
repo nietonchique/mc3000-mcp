@@ -692,8 +692,10 @@ pub fn parse_voltage_curve(data: &[u8]) -> Result<VoltageCurve, ProtocolError> {
     let slot = data[2];
     let interval_ms = u32::from(u16::from_be_bytes([data[3], data[4]])) * 1000;
     let points_mv: Vec<u16> = data[5..CURVE_LEN]
-        .chunks_exact(2)
-        .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_be_bytes(*pair))
         .collect();
     let time_series = voltage_curve_time_series(&points_mv, interval_ms);
     let duration_seconds = time_series.last().map_or(0.0, |point| point.time_seconds);

@@ -122,7 +122,7 @@ fn rejects_bad_scalar_values() {
             "timeout_minutes must be 0..1440".to_string(),
         ]
     );
-    assert!(result.warnings.is_empty());
+    assert_eq!(result.warnings, Vec::<String>::new());
     // normalized_profile keeps the raw (unnormalized) input values.
     assert_eq!(result.normalized_profile["capacity_mah"], 0);
     assert_eq!(result.normalized_profile["temperature_cutoff_c"], "hot");

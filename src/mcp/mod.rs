@@ -10,6 +10,7 @@ pub mod prompts;
 pub mod resources;
 pub mod tools;
 
+use std::future::{Future, ready};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -19,6 +20,7 @@ use rmcp::model::{
     ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
     ReadResourceResult, ResourceContents, ServerCapabilities, ServerConfig,
 };
+use rmcp::service::MaybeSendFuture;
 use rmcp::service::RequestContext;
 use rmcp::service::RoleServer;
 use rmcp::{ServerHandler, tool_handler};
@@ -136,6 +138,10 @@ impl McpService {
 }
 
 /// Route `tools/list` and `tools/call` through the generated tool router.
+// rmcp 3.7 generates an immediately-ready async trait method; newer Clippy
+// flags that generated code until the SDK changes its macro output.
+#[allow(unknown_lints)]
+#[allow(clippy::unused_async_trait_impl)]
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for McpService {
     /// `initialize` response: name, `CARGO_PKG_VERSION`, and the
@@ -152,19 +158,51 @@ impl ServerHandler for McpService {
     }
 
     /// List the five `charger://` resources.
-    async fn list_resources(
+    fn list_resources(
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourcesResult, rmcp::ErrorData> {
-        Ok(ListResourcesResult::with_all_items(resources::list()))
+    ) -> impl Future<Output = Result<ListResourcesResult, rmcp::ErrorData>> + MaybeSendFuture + '_
+    {
+        ready(Ok(ListResourcesResult::with_all_items(resources::list())))
     }
 
     /// Read one resource payload as pretty JSON.
-    async fn read_resource(
+    fn read_resource(
         &self,
         request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ReadResourceResponse, rmcp::ErrorData>> + MaybeSendFuture + '_
+    {
+        ready(self.read_resource_payload(request))
+    }
+
+    /// List the five safe-charging prompts.
+    fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListPromptsResult, rmcp::ErrorData>> + MaybeSendFuture + '_
+    {
+        ready(Ok(ListPromptsResult::with_all_items(prompts::list())))
+    }
+
+    /// Return one prompt as a single user text message.
+    fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<GetPromptResponse, rmcp::ErrorData>> + MaybeSendFuture + '_
+    {
+        ready(Self::prompt_payload(&request))
+    }
+}
+
+impl McpService {
+    /// Synchronously build a resource response for [`ServerHandler::read_resource`].
+    fn read_resource_payload(
+        &self,
+        request: ReadResourceRequestParams,
     ) -> Result<ReadResourceResponse, rmcp::ErrorData> {
         let Some(payload) = resources::read(&request.uri, &self.session) else {
             return Err(rmcp::ErrorData::internal_error(
@@ -179,20 +217,9 @@ impl ServerHandler for McpService {
         .into())
     }
 
-    /// List the five safe-charging prompts.
-    async fn list_prompts(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListPromptsResult, rmcp::ErrorData> {
-        Ok(ListPromptsResult::with_all_items(prompts::list()))
-    }
-
-    /// Return one prompt as a single user text message.
-    async fn get_prompt(
-        &self,
-        request: GetPromptRequestParams,
-        _context: RequestContext<RoleServer>,
+    /// Synchronously build a prompt response for [`ServerHandler::get_prompt`].
+    fn prompt_payload(
+        request: &GetPromptRequestParams,
     ) -> Result<GetPromptResponse, rmcp::ErrorData> {
         match prompts::get(&request.name) {
             Some(result) => Ok(result.into()),
