@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-10-23
 
 Full rewrite of the server in Rust. The major MCP tool names, read-only response fields, protocol
 behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
