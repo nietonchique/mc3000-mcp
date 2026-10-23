@@ -29,9 +29,6 @@ They are advertised together but installed through different mechanisms.
 # MCP server
 cargo install mc3000-mcp --locked
 
-# Any MCP client
-mc3000-mcp
-
 # Arch Linux
 paru -S mc3000-mcp
 
@@ -42,12 +39,14 @@ curl -fsSL \
   | tar -xz -C ~/.codex/skills
 ```
 
+Register the stdio server with your MCP client using the `mcpServers` example above.
+
 Hermes users may alternatively run:
 
 ```bash
 hermes mcp add mc3000 --command mc3000-mcp
 hermes skills install \
-  https://raw.githubusercontent.com/nietonchique/mc3000-mcp/main/skill/SKILL.md \
+  https://raw.githubusercontent.com/nietonchique/mc3000-mcp/v0.2.1/skill/SKILL.md \
   --name charger-agent
 ```
 
@@ -78,8 +77,9 @@ hermes skills install \
    ```
 
 6. Wait for CI and the tag-driven Release workflow. It verifies the tag/version match, tests, builds,
-   packages, creates the Linux x86_64 archive and deterministic MCPB bundle, renders release registry
-   metadata with the real SHA-256, writes BLAKE2b checksums, and attaches build provenance.
+   packages, creates the Linux x86_64 archive, deterministic MCPB bundle, standalone Agent Skill
+   archive, and reproducible source archive; renders release registry metadata with the real
+   SHA-256, writes BLAKE2b checksums, and attaches build provenance.
 7. Inspect the GitHub release artifacts and attestations.
 8. Publish the crate only after artifact inspection:
 
@@ -91,7 +91,9 @@ hermes skills install \
 9. Submit/update the rendered release `server.json` with the Official MCP Registry following the
    registry's current process. Do not submit placeholder checksums.
 10. Publish the AUR update:
-    - download the tagged source archive and replace the `b2sums` entry in `packaging/aur/PKGBUILD`;
+    - download the release assets `mc3000-mcp-<version>-source.tar.gz` and
+      `mc3000-mcp-<version>-source.tar.gz.b2`; replace the `b2sums` entry after
+      `b2sum -c --strict`;
     - run `makepkg --printsrcinfo > .SRCINFO`;
     - build in a clean chroot and run `namcap`;
     - install the built package and smoke-test `mc3000-mcp --version` plus `mc3000-mcp --backend fake`;
