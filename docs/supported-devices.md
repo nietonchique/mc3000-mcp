@@ -48,7 +48,8 @@ Live-tested operations on NiMH in physical slot 4 / API slot 3:
 
 - USB/microUSB firmware update mode is not implemented by this MCP server. BLE control can work even when the charger does not enumerate as a USB device on a PC.
 - App-compatible curves are voltage-only historical data. Current/capacity/temperature/resistance are current status fields, not charger-provided historical series.
-- A profile write ACK is not proof the charger accepted the profile. Verify by reading slot status and checking mode/current/status.
+- A profile write ACK is not proof the charger accepted the profile. Verify by starting the slot and checking mode/current/status: the `0x55` mode keeps showing the previous program until the slot starts.
+- Profile writes depend on firmware: 1.13 never acknowledges them; 1.27 acknowledges and applies them. See `reverse-notes.md`.
 - Unknown firmware or clones may interpret profile fields differently. Keep live writes conservative.
 
 ## Not yet supported
