@@ -14,7 +14,7 @@
   "temperature_policy": "stop at cutoff; keep charger supervised",
   "negative_delta_mv": 3,
   "trickle_current_ma": 0,
-  "source": "GP 2700 AA label + SKYRC MC3000 manual safe defaults",
+  "source": "GP AA NiMH label (2600 mAh) + SKYRC MC3000 manual safe defaults",
   "risk_level": "low",
-  "notes": "Slow conservative NiMH AA charge."
+  "notes": "Slow conservative charge for GP AA NiMH 2600 mAh cells."
 }

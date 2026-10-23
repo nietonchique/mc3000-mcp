@@ -399,10 +399,10 @@ fn nimh_aa_conservative_charge() -> BatteryProfile {
         cycle_mode: None,
         negative_delta_mv: Some(3),
         trickle_current_ma: Some(0),
-        source: "GP 2700 AA label + SKYRC MC3000 manual safe defaults".to_string(),
+        source: "GP AA NiMH label (2600 mAh) + SKYRC MC3000 manual safe defaults".to_string(),
         risk_level: RiskLevel::Low,
         notes: Some(
-            "Slow conservative NiMH AA charge; user must confirm chemistry and capacity."
+            "Slow conservative charge for GP AA NiMH 2600 mAh cells; user must confirm chemistry and capacity."
                 .to_string(),
         ),
     }
