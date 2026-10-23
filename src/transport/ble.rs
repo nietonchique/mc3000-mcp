@@ -123,6 +123,30 @@ async fn scan_adapter(
     Ok(found)
 }
 
+/// Merge multi-adapter scan results into one device per Bluetooth address.
+///
+/// Both local adapters can observe the same charger; the Python backend naturally returned one
+/// device, so preserve first-seen order and only fill in a missing name/RSSI from a later adapter.
+fn merge_scan_devices(devices: Vec<ScanDevice>) -> Vec<ScanDevice> {
+    let mut merged: Vec<ScanDevice> = Vec::new();
+    for device in devices {
+        if let Some(existing) = merged
+            .iter_mut()
+            .find(|candidate| candidate.address == device.address)
+        {
+            if existing.name.is_none() {
+                existing.name = device.name;
+            }
+            if existing.rssi.is_none() {
+                existing.rssi = device.rssi;
+            }
+        } else {
+            merged.push(device);
+        }
+    }
+    merged
+}
+
 /// Poll one adapter until `target` appears (or the window closes).
 async fn discover_on_adapter(
     adapter: &Adapter,
@@ -180,7 +204,7 @@ impl Transport for BleTransport {
         {
             return Err(error);
         }
-        Ok(devices)
+        Ok(merge_scan_devices(devices))
     }
 
     async fn connect(&self, address: &str) -> Result<(), TransportError> {
@@ -353,5 +377,55 @@ fn lock_state(state: &Mutex<BleState>) -> std::sync::MutexGuard<'_, BleState> {
     match state.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn merge_scan_devices_keeps_one_entry_per_address() {
+        let merged = merge_scan_devices(vec![
+            ScanDevice {
+                address: "F8:2E:0C:B8:A6:15".to_owned(),
+                name: Some("Charger".to_owned()),
+                rssi: None,
+            },
+            ScanDevice {
+                address: "F8:2E:0C:B8:A6:15".to_owned(),
+                name: None,
+                rssi: Some(-76),
+            },
+            ScanDevice {
+                address: "AA:BB:CC:DD:EE:FF".to_owned(),
+                name: Some("SimpleBLEPeripheral".to_owned()),
+                rssi: Some(-90),
+            },
+        ]);
+
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].name.as_deref(), Some("Charger"));
+        assert_eq!(merged[0].rssi, Some(-76));
+        assert_eq!(merged[1].address, "AA:BB:CC:DD:EE:FF");
+    }
+
+    #[test]
+    fn merge_scan_devices_preserves_distinct_addresses() {
+        let merged = merge_scan_devices(vec![
+            ScanDevice {
+                address: "AA:BB:CC:DD:EE:01".to_owned(),
+                name: Some("Charger".to_owned()),
+                rssi: Some(-70),
+            },
+            ScanDevice {
+                address: "AA:BB:CC:DD:EE:02".to_owned(),
+                name: Some("HitecCharger".to_owned()),
+                rssi: Some(-71),
+            },
+        ]);
+
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[1].name.as_deref(), Some("HitecCharger"));
     }
 }
