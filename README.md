@@ -76,7 +76,7 @@ cargo install --path . --locked
 From the released tag:
 
 ```bash
-cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.0 --locked
+cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.1 --locked
 ```
 
 On Arch Linux:

@@ -470,6 +470,50 @@ async fn connect_finds_device_and_defaults_to_mc3000() {
     assert_eq!(fake.current_address(), None);
 }
 
+#[tokio::test(start_paused = true)]
+async fn concurrent_tool_calls_wait_for_connection_lifecycle() {
+    let fake = FakeTransport::with_scan_devices(vec![device(ADDRESS)]);
+    fake.set_connect_delay(Some(std::time::Duration::from_millis(200)));
+    let client = Arc::new(harness(&fake).await);
+
+    let connect_client = Arc::clone(&client);
+    let connect = tokio::spawn(async move {
+        call_ok(
+            &connect_client,
+            "charger.connect",
+            json!({"address": ADDRESS, "timeout": 0.5}),
+        )
+        .await
+    });
+    tokio::task::yield_now().await;
+
+    let status_client = Arc::clone(&client);
+    let status =
+        tokio::spawn(async move { call(&status_client, "charger.get_status", Value::Null).await });
+    tokio::task::yield_now().await;
+
+    let connected = match connect.await {
+        Ok(value) => value,
+        Err(error) => panic!("connect task panicked: {error}"),
+    };
+    assert_eq!(connected["connected"], json!(true));
+    assert_eq!(fake.current_address().as_deref(), Some(ADDRESS));
+
+    for slot_value in 0..=3_u8 {
+        fake.inject(&status_frame(slot_value));
+    }
+    let status_result = match status.await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => panic!("concurrent get_status failed: {error}"),
+        Err(error) => panic!("status task panicked: {error}"),
+    };
+    let statuses = payload(&status_result);
+    assert_eq!(statuses["slots"].as_array().map(Vec::len), Some(4));
+
+    let disconnected = call_ok(&client, "mc3000_disconnect", Value::Null).await;
+    assert_eq!(disconnected, json!({"connected": false}));
+    assert_eq!(fake.current_address(), None);
+}
 #[tokio::test]
 async fn status_family_reads_fake_slots() {
     let fake = FakeTransport::with_scan_devices(vec![device(ADDRESS)]);

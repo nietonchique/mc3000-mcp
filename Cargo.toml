@@ -1,6 +1,6 @@
 [package]
 name = "mc3000-mcp"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
 description = "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy"

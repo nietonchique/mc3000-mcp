@@ -40,6 +40,7 @@ struct FakeInner {
     scan_devices: Mutex<Vec<ScanDevice>>,
     scan_failure: Mutex<Option<TransportError>>,
     connect_failure: Mutex<Option<TransportError>>,
+    connect_delay: Mutex<Option<Duration>>,
 }
 
 /// Scriptable fake [`Transport`]; clone freely, all clones share state.
@@ -65,6 +66,7 @@ impl FakeTransport {
                 scan_devices: Mutex::new(devices),
                 scan_failure: Mutex::new(None),
                 connect_failure: Mutex::new(None),
+                connect_delay: Mutex::new(None),
             }),
         }
     }
@@ -82,6 +84,14 @@ impl FakeTransport {
     /// Script a `connect` failure; `None` clears the script.
     pub fn set_connect_failure(&self, failure: Option<TransportError>) {
         *Self::lock(&self.inner.connect_failure) = failure;
+    }
+
+    /// Delay `connect` by `delay` before marking the link live.
+    ///
+    /// Used to exercise concurrent MCP request dispatch against a backend that
+    /// is genuinely awaiting a BLE connection.
+    pub fn set_connect_delay(&self, delay: Option<Duration>) {
+        *Self::lock(&self.inner.connect_delay) = delay;
     }
 
     /// Make `stop_notify` fail during `disconnect` (suppressed, like the Python
@@ -171,6 +181,10 @@ impl Transport for FakeTransport {
     async fn connect(&self, address: &str) -> Result<(), TransportError> {
         if let Some(failure) = Self::lock(&self.inner.connect_failure).clone() {
             return Err(failure);
+        }
+        let delay = *Self::lock(&self.inner.connect_delay);
+        if let Some(delay) = delay {
+            tokio::time::sleep(delay).await;
         }
         let mut state = Self::lock(&self.inner.state);
         state.connected = true;

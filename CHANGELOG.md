@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23
+
+### Fixed
+
+- Serialize concurrent MCP tool calls so pipelined `connect`, read, write, and `disconnect`
+  requests cannot race shared charger connection state.
+- Add a deterministic fake-backend connect delay and regression coverage for concurrent
+  connection lifecycle requests.
+
+
 ## [0.2.0] - 2026-10-23
 
 Full rewrite of the server in Rust. The major MCP tool names, read-only response fields, protocol
@@ -56,5 +66,6 @@ behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
 
 Releases before 0.2.0 shipped the Python implementation and predate this changelog.
 
-[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.0

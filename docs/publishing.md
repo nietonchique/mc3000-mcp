@@ -27,7 +27,7 @@ They are advertised together but installed through different mechanisms.
 
 ```bash
 # MCP server
-cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.0 --locked
+cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.1 --locked
 hermes mcp add mc3000 --command mc3000-mcp
 hermes mcp test mc3000
 

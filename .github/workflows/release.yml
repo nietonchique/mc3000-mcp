@@ -43,6 +43,22 @@ jobs:
             echo "Cargo.toml version does not match tag ${GITHUB_REF_NAME}" >&2
             exit 1
           }
+          grep -q "\"version\": \"${version}\"" packaging/mcpb/manifest.json || {
+            echo "MCPB manifest version does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+          test "$(grep -c "\"version\": \"${version}\"" packaging/mcpb/server.json.template)" -eq 2 || {
+            echo "Registry template versions do not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+          grep -q "\"version\": \"${version}\"" server.json || {
+            echo "server.json version does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+          grep -qxm1 "pkgver=${version}" packaging/aur/PKGBUILD || {
+            echo "AUR PKGBUILD version does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
 
       - name: Run tests
         run: cargo test --all-features --locked

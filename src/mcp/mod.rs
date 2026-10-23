@@ -15,10 +15,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rmcp::handler::server::router::tool::ToolRouter;
+use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    GetPromptRequestParams, GetPromptResponse, Implementation, ListPromptsResult,
-    ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
-    ReadResourceResult, ResourceContents, ServerCapabilities, ServerConfig,
+    CallToolRequestParams, CallToolResponse, GetPromptRequestParams, GetPromptResponse,
+    Implementation, ListPromptsResult, ListResourcesResult, PaginatedRequestParams,
+    ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, ResourceContents,
+    ServerCapabilities, ServerConfig,
 };
 use rmcp::service::MaybeSendFuture;
 use rmcp::service::RequestContext;
@@ -104,6 +106,7 @@ pub struct McpService {
     client: Arc<ChargerClient<SharedTransport>>,
     session: Arc<SessionLog>,
     tool_router: ToolRouter<Self>,
+    operation_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl McpService {
@@ -120,6 +123,7 @@ impl McpService {
             client: Arc::new(ChargerClient::new(SharedTransport::new(transport))),
             session,
             tool_router: Self::tool_router(),
+            operation_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -155,6 +159,22 @@ impl ServerHandler for McpService {
                 .build(),
         )
         .with_server_info(Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION")))
+    }
+
+    /// Execute exactly one tool call at a time.
+    ///
+    /// rmcp may dispatch pipelined requests concurrently. Charger connection
+    /// state is shared by every tool, so `connect`/`disconnect` must not race
+    /// reads or writes. The lock is held for the whole handler; list/read-only
+    /// metadata endpoints remain concurrent.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        let _guard = self.operation_lock.lock().await;
+        let tool_context = ToolCallContext::new(self, request, context);
+        self.tool_router.call(tool_context).await
     }
 
     /// List the five `charger://` resources.
