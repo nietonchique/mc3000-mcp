@@ -90,6 +90,19 @@ fn set_basic_ack() -> Vec<u8> {
     with_checksum(&frame)
 }
 
+/// Firmware acknowledgement frame for `opcode` echoing `mask` in byte 2
+/// (reverse-engineered ACK layout: `0F <opcode> <mask> F0 FF FF 00…00 <sum>`).
+fn ack_frame(opcode: Opcode, mask: u8) -> Vec<u8> {
+    let mut frame = vec![0u8; protocol::FRAME_LEN];
+    frame[0] = 0x0F;
+    frame[1] = opcode.as_u8();
+    frame[2] = mask;
+    frame[3] = 0xF0;
+    frame[4] = 0xFF;
+    frame[5] = 0xFF;
+    with_checksum(&frame)
+}
+
 /// Client connected through a fresh fake; both handles share state.
 async fn connected_client(
     model: ChargerModel,
@@ -401,6 +414,12 @@ async fn poll_all_status_is_sequential_with_gaps() {
 async fn send_profile_write_order_and_delays() {
     let (client, fake) = connected_client(ChargerModel::Mc3000).await;
     let profile = profile_bytes(0b0011);
+    // Firmware ACKs for both stops, the profile write, and both starts.
+    fake.inject(&ack_frame(Opcode::Stop, 0b0011));
+    fake.inject(&ack_frame(Opcode::Stop, 0b0011));
+    fake.inject(&ack_frame(Opcode::SetProfile, 0b0011));
+    fake.inject(&ack_frame(Opcode::Start, 0b0011));
+    fake.inject(&ack_frame(Opcode::Start, 0b0011));
     let report = expect_ok(client.send_profile(&profile, true).await, "send_profile");
     assert!(report.ok);
     assert_eq!(report.stopped_slots, vec![0, 1]);
@@ -415,17 +434,19 @@ async fn send_profile_write_order_and_delays() {
     assert_eq!(writes[4], command_start(slot(0)).to_vec());
     assert_eq!(writes[5], command_start(slot(1)).to_vec());
     let instants = fake.write_instants();
+    // Stop pacing comes from ACK waits, not a fixed sleep: each stop waits
+    // for its acknowledgement before the next write.
     assert_gap(
         gap(instants[0], instants[1]),
-        Duration::from_millis(490),
-        Duration::from_millis(600),
-        "stop 0 -> stop 1",
+        Duration::ZERO,
+        Duration::from_millis(100),
+        "stop 0 -> stop 1 (ack-paced)",
     );
     assert_gap(
         gap(instants[1], instants[2]),
-        Duration::from_millis(490),
-        Duration::from_millis(600),
-        "stop 1 -> chunk 1",
+        Duration::ZERO,
+        Duration::from_millis(100),
+        "stop 1 -> chunk 1 (ack-paced)",
     );
     assert_gap(
         gap(instants[2], instants[3]),
@@ -437,13 +458,13 @@ async fn send_profile_write_order_and_delays() {
         gap(instants[3], instants[4]),
         Duration::from_secs(5),
         Duration::from_secs(6),
-        "chunk 2 -> profile settle -> start 0",
+        "profile ack -> settle -> start 0",
     );
     assert_gap(
         gap(instants[4], instants[5]),
         Duration::ZERO,
-        Duration::from_millis(20),
-        "start 0 -> start 1",
+        Duration::from_millis(100),
+        "start 0 -> start 1 (ack-paced)",
     );
 }
 
@@ -451,6 +472,8 @@ async fn send_profile_write_order_and_delays() {
 async fn send_profile_without_start() {
     let (client, fake) = connected_client(ChargerModel::Mc3000).await;
     let profile = profile_bytes(0b0100);
+    fake.inject(&ack_frame(Opcode::Stop, 0b0100));
+    fake.inject(&ack_frame(Opcode::SetProfile, 0b0100));
     let report = expect_ok(client.send_profile(&profile, false).await, "send_profile");
     assert_eq!(report.stopped_slots, vec![2]);
     assert!(!report.started);
@@ -465,6 +488,54 @@ async fn send_profile_without_start() {
         Duration::from_millis(40),
         Duration::from_millis(150),
         "chunk gap",
+    );
+}
+
+/// Firmware 1.13 never acknowledges `0x11`. The first profile write falls
+/// back to the settle delay, and the fallback is cached so a second write
+/// skips the acknowledgement wait entirely.
+#[tokio::test(start_paused = true)]
+async fn profile_without_ack_falls_back_to_settle_and_caches() {
+    let (client, fake) = connected_client(ChargerModel::Mc3000).await;
+    let profile = profile_bytes(0b0001);
+    fake.inject(&ack_frame(Opcode::Stop, 0b0001)); // stops still ack (1.13 does)
+    let report = expect_ok(client.send_profile(&profile, false).await, "send_profile 1");
+    assert_eq!(report.stopped_slots, vec![0]);
+    // First write: 2 s ack timeout + 5 s settle, then success.
+    let instants = fake.write_instants();
+    assert_gap(
+        gap(instants[2], tokio::time::Instant::now()),
+        Duration::from_secs(7),
+        Duration::from_secs(8),
+        "profile timeout + settle on first write",
+    );
+
+    // Second write: cached fallback skips the 2 s wait (stop ack + 5 s only).
+    let report = expect_ok(client.send_profile(&profile, false).await, "send_profile 2");
+    assert_eq!(report.stopped_slots, vec![0]);
+    let instants = fake.write_instants();
+    assert_gap(
+        gap(instants[4], tokio::time::Instant::now()),
+        Duration::from_secs(5),
+        Duration::from_secs(6),
+        "cached fallback: settle only",
+    );
+    assert_eq!(fake.writes().len(), 6, "two full stop+chunk sequences");
+}
+
+/// `stop_acked` resolves on the firmware acknowledgement and surfaces the
+/// timeout when none arrives (callers decide whether to continue).
+#[tokio::test(start_paused = true)]
+async fn stop_acked_confirms_delivery_and_times_out_without_ack() {
+    let (client, fake) = connected_client(ChargerModel::Mc3000).await;
+    fake.inject(&ack_frame(Opcode::Stop, 1 << 2));
+    expect_ok(client.stop_acked(slot(2)).await, "stop_acked with ack");
+    assert_eq!(fake.writes(), vec![command_stop(slot(2)).to_vec()]);
+
+    let result = client.stop_acked(slot(1)).await;
+    assert!(
+        matches!(result, Err(ChargerError::Transport(_))),
+        "expected reply timeout, got {result:?}"
     );
 }
 

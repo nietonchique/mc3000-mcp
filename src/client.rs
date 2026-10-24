@@ -32,12 +32,19 @@ pub const CURVE_TIMEOUT: Duration = Duration::from_secs(8);
 pub const SCAN_TIMEOUT: Duration = Duration::from_secs(5);
 /// Gap between sequential slot polls (Python `asyncio.sleep(0.05)`).
 pub const SLOT_POLL_GAP: Duration = Duration::from_millis(50);
-/// Delay after each profile stop write (Python `asyncio.sleep(0.5)`).
-pub const PROFILE_STOP_DELAY: Duration = Duration::from_millis(500);
+/// Wait for a stop acknowledgement before the next write. Firmware 1.13 and
+/// 1.23 both acknowledge `0xFE`; the wait paces writes the way the firmware
+/// expects and confirms delivery.
+pub const STOP_ACK_TIMEOUT: Duration = Duration::from_millis(500);
+/// Wait for the `0x11` profile-write acknowledgement. Firmware 1.27
+/// acknowledges within milliseconds; 1.13 never acknowledges (see
+/// `docs/reverse-notes.md`), so a timeout falls back to the settle delay.
+pub const PROFILE_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 /// Delay between the two profile chunk writes (Python `asyncio.sleep(0.05)`).
 pub const PROFILE_CHUNK_GAP: Duration = Duration::from_millis(50);
-/// Delay after profile chunks before the charger can reliably accept starts.
-/// Live MC3000 firmware 1.23 ignored immediate starts; 5 seconds is repeatable.
+/// Delay after the profile acknowledgement before the charger can reliably
+/// accept starts. Live MC3000 firmware 1.23 ignored starts issued right after
+/// an acknowledged profile write; 5 seconds is repeatable.
 pub const PROFILE_SETTLE_DELAY: Duration = Duration::from_secs(5);
 /// Delay between the profile chunks and the start writes
 /// (Python `asyncio.sleep(0.5)`).
@@ -97,6 +104,11 @@ struct ClientState {
     model: Option<ChargerModel>,
     address: Option<String>,
     curve_buffer: Vec<u8>,
+    /// Cached result of the first `0x11` profile-write acknowledgement wait:
+    /// `true` once the firmware acknowledged a profile, `false` after a
+    /// timeout (firmware 1.13 never acknowledges). `None` until the first
+    /// profile write on this connection.
+    profile_acks: Option<bool>,
 }
 
 /// Serialized charger client over a [`Transport`].
@@ -292,6 +304,25 @@ impl<T: Transport> ChargerClient<T> {
         Ok(self.transport.write(&command_stop(slot)).await?)
     }
 
+    /// Stop the program in `slot` and wait for the `0xFE` acknowledgement.
+    /// Every observed MC3000 firmware acknowledges stops, so the wait both
+    /// paces consecutive stop writes and confirms delivery; on timeout the
+    /// stop may still have been applied (fire-and-forget semantics).
+    ///
+    /// # Errors
+    ///
+    /// Same as [`ChargerClient::write`] plus
+    /// [`TransportError::ReplyTimeout`] when no acknowledgement arrives
+    /// within [`STOP_ACK_TIMEOUT`].
+    pub async fn stop_acked(&self, slot: Slot) -> Result<(), ChargerError> {
+        self.require_write_model()?;
+        let _guard = self.request_lock.lock().await;
+        self.transport.write(&command_stop(slot)).await?;
+        self.wait_for_locked(Some(Opcode::Stop), STOP_ACK_TIMEOUT)
+            .await
+            .map(|_| ())
+    }
+
     /// Write a frame and wait for the matching parsed reply. The expected
     /// opcode defaults to the frame's opcode byte. Frames whose opcode is a
     /// write acknowledgement (start, set-profile, set-basic, stop, restore)
@@ -429,10 +460,16 @@ impl<T: Transport> ChargerClient<T> {
             .await
     }
 
-    /// Apply a 40-byte profile with the exact APK write order: stop every
-    /// masked slot (500 ms after each), write chunk 1, wait 50 ms, write
-    /// chunk 2, wait 5 seconds for the charger to settle; when `start`, wait
-    /// another 500 ms and start every masked slot.
+    /// Apply a 40-byte profile with APK write order and firmware-level
+    /// acknowledgements: stop every masked slot and wait for each `0xFE` ACK
+    /// (500 ms timeout, best-effort), write chunk 1, wait 50 ms, write chunk
+    /// 2, then wait for the `0x11` profile ACK. Firmware 1.27 acknowledges
+    /// within milliseconds; firmware 1.13 never does, so a 2 s timeout falls
+    /// back to the 5 s settle delay and caches the result for later writes on
+    /// this connection. When `start`, the settle delay runs before the start
+    /// writes regardless of the ACK (firmware 1.23 ignored starts issued
+    /// immediately after an acknowledged profile), then every masked slot is
+    /// started and its `0x05` ACK awaited best-effort.
     /// Requires a write-capable model.
     ///
     /// # Errors
@@ -455,16 +492,35 @@ impl<T: Transport> ChargerClient<T> {
             }
             let slot = Slot::try_from(value).map_err(ChargerError::Protocol)?;
             self.transport.write(&command_stop(slot)).await?;
+            if let Err(error) = self
+                .wait_for_locked(Some(Opcode::Stop), STOP_ACK_TIMEOUT)
+                .await
+            {
+                tracing::warn!(slot = value, %error, "profile stop ack timeout; continuing");
+            }
             stopped.push(value);
-            tokio::time::sleep(PROFILE_STOP_DELAY).await;
         }
         self.transport.write(&first).await?;
         tokio::time::sleep(PROFILE_CHUNK_GAP).await;
         self.transport.write(&second).await?;
-        // The charger acknowledged profile writes but ignored starts issued immediately.
-        // Keep the protocol settle wait inside the client so callers cannot race it.
-        tokio::time::sleep(PROFILE_SETTLE_DELAY).await;
+        // Firmware 1.13 never acknowledges `0x11`; after the first timeout the
+        // result is cached and later writes skip the wait entirely.
+        let known = Self::lock(&self.state).profile_acks;
+        let acked = if known == Some(false) {
+            false
+        } else if self
+            .wait_for_locked(Some(Opcode::SetProfile), PROFILE_ACK_TIMEOUT)
+            .await
+            .is_ok()
+        {
+            Self::lock(&self.state).profile_acks = Some(true);
+            true
+        } else {
+            Self::lock(&self.state).profile_acks = Some(false);
+            false
+        };
         if start {
+            tokio::time::sleep(PROFILE_SETTLE_DELAY).await;
             tokio::time::sleep(PROFILE_START_DELAY).await;
             for value in 0..=3u8 {
                 if slot_mask & (1 << value) == 0 {
@@ -472,7 +528,17 @@ impl<T: Transport> ChargerClient<T> {
                 }
                 let slot = Slot::try_from(value).map_err(ChargerError::Protocol)?;
                 self.transport.write(&command_start(slot)).await?;
+                if let Err(error) = self
+                    .wait_for_locked(Some(Opcode::Start), STOP_ACK_TIMEOUT)
+                    .await
+                {
+                    tracing::warn!(slot = value, %error, "profile start ack timeout; continuing");
+                }
             }
+        } else if !acked {
+            // No start follows, but firmware without profile ACKs still needs
+            // the settle window for the write to take effect.
+            tokio::time::sleep(PROFILE_SETTLE_DELAY).await;
         }
         Ok(SendProfileReport {
             ok: true,

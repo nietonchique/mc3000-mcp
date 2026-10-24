@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `send_profile` and `charger.stop_all` now wait for firmware acknowledgements instead of using
+  fixed inter-write sleeps: each `0xFE` stop awaits its ACK (500 ms timeout, best-effort), and
+  the `0x11` profile write awaits its ACK with a 2 s timeout. Profile writes without a start
+  return as soon as the firmware acknowledges them instead of always waiting the 5 s settle
+  delay; the settle delay remains before start writes because firmware 1.23 ignored starts
+  issued immediately after an acknowledged profile.
+- Firmware 1.13 (which never acknowledges `0x11`) falls back to the settle delay and caches the
+  behaviour per connection, so later profile writes skip the acknowledgement wait.
+
+### Fixed
+
+- `charger.stop_all` now aborts with the model-gate error on read-only models instead of
+  swallowing it as a per-slot acknowledgement timeout.
+
 ## [0.2.3] - 2026-10-25
 
 ### Fixed

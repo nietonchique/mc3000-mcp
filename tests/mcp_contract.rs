@@ -1097,6 +1097,10 @@ async fn emergency_stops_are_tokenless() {
     let payload = call_ok(&client, "charger.stop_slot", json!({"slot": 0})).await;
     assert_eq!(payload, json!({"sent": "stop", "slot": 0}));
 
+    // `stop_all` awaits each stop acknowledgement before the next write.
+    for _ in 0..4 {
+        fake.inject(&ack_frame(Opcode::Stop));
+    }
     let payload = call_ok(&client, "charger.stop_all", Value::Null).await;
     assert_eq!(payload, json!({"sent": "stop_all", "slots": [0, 1, 2, 3]}));
 

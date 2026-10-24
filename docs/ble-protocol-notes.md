@@ -31,6 +31,26 @@ See `docs/reverse-notes.md` for detailed recovered frame notes. This file is the
 | `0x63` | write/ack | set basic settings |
 | `0xFE` | write | stop slot bitmask |
 
+## Write acknowledgements
+
+`0x05` (start), `0x11` (profile), `0x63` (basic settings), and `0xFE` (stop) are acknowledged by
+the charger. Firmware 1.27 also acknowledges `0x11`; firmware 1.13 never does (see
+`reverse-notes.md`). The ACK frame is 20 bytes:
+
+| Offset | Value |
+| --- | --- |
+| 0 | `0x0F` |
+| 1 | original opcode |
+| 2 | slot mask or result code |
+| 3–5 | `0xF0 0xFF 0xFF` |
+| 6–18 | `0x00` |
+| 19 | checksum (sum of bytes 0–18) |
+
+Confirmed-by-RE stop semantics: a stop mask of `0x0F` sets display-reset state flags only and
+does NOT stop charging. Individual slot bits (`0x01`–`0x08`) stop the corresponding slot.
+Reliable multi-slot stops must therefore send one stop frame per slot, waiting for each ACK
+before the next write (firmware 1.23 drops back-to-back stop frames).
+
 ## MC3000 vs MC5000 status selection
 
 The server must not infer charger model from inserted batteries. Detect or select the model using read-only charger/protocol behavior:

@@ -252,3 +252,89 @@ voltage defaults filled in and the slot stopped first:
   starting the slot and checking mode and current can.
 
 Firmware versions between 1.13 and 1.27 were not tested.
+
+## Firmware image analysis (V1.27)
+
+The official `MC3000_Firmware_Update__V1.27.exe` is a .NET assembly that embeds two Intel HEX
+resources. Extraction: unzip → read the .NET managed resources (search for contiguous Intel HEX
+record runs) → convert with `intelhex.tobinfile()`.
+
+- `UpgradeFirmware.rom.hex` → STM32F103 main firmware, ARM Cortex-M3, 88396 bytes @ `0x08004000`.
+  Handles charging logic, display, BLE protocol parsing.
+- `UpgradeFirmware.loader.hex` → C8051F380 USB-interface MCU, 8051, 45584 bytes @ `0x00000000`.
+  Handles USB HID only; irrelevant for BLE protocol.
+
+### BLE command dispatcher (`FUN_08015b48` @ `0x08015b48`)
+
+Single entry point for all 20-byte frames. Parses `byte[1]` as opcode, `byte[2]` as slot mask
+or slot index depending on command.
+
+### ACK frame format (`FUN_080164e0`)
+
+Every acknowledged command gets a 20-byte reply:
+
+| Offset | Value |
+| --- | --- |
+| 0 | `0x0F` |
+| 1 | original opcode (echo) |
+| 2 | result/slot mask (usually echo of the request byte 2) |
+| 3 | `0xF0` |
+| 4 | `0xFF` |
+| 5 | `0xFF` |
+| 6–18 | `0x00` |
+| 19 | checksum (sum of bytes 0–18) |
+
+This is the `0f <opcode> <mask> f0 ff ff …` shape observed live. A reliable write-confirmation
+path is: send command → wait for ACK with matching byte 1 and byte 2.
+
+### Stop command (`0xFE`) — two semantically different paths
+
+- **mask `0x0F` (all four bits)**: does NOT stop individual slots. Sets three global display/UI
+  state flags (`[+0x0a]=2, [+0x0b]=2, [+0x0d]=0x32`). This is a "reset to overview screen" action,
+  not a charge stop. Sending a single `0F FE 0F <checksum>` frame does not stop a running slot.
+- **individual bit masks (`0x01`–`0x0E`)**: iterates slots 0–3; for each bit set: if the slot is
+  in remote-control mode, clears the remote flag and triggers the stop; otherwise clears the
+  slot-active flag. If all four slots were non-remote, also sets the display-reset flag.
+
+Consequence: the server correctly uses per-slot stop frames. A hypothetical "stop all with one
+frame" using mask `0x0F` is not viable.
+
+### Profile write (`0x11`) — per-slot handler (`FUN_08016524`)
+
+The dispatcher calls `FUN_08016524(slot)` for each bit set in `byte[2]`. The 40-byte frame payload
+is copied from a staging buffer into per-slot storage (stride `0x22`) with this mapping:
+
+| Frame byte(s) | Storage offset | Meaning |
+| --- | --- | --- |
+| 3 | +0 | mode code |
+| 4 | +1 | sub-mode/secondary code |
+| 5–14 (5× u16 LE) | +4…+0x0a | voltage/current program parameters |
+| 15–28 (7× u16 LE) | +0x0c…+0x1e | additional parameters incl. cutoff-δV, temperature |
+| 0x13 (frame byte 19) | +0x0f | flag byte |
+| 0x14 | +0x0e | flag byte |
+| 0x15 | +0x11 | flag byte |
+| 0x16 | +0x12 | u8 value |
+| 0x17 | +0x14 | u8 × 10 |
+| 0x18–0x19 | +0x1c | u16 LE |
+| 0x1a | +0x1e | u8 × 10 |
+| 0x1b–0x1c | +0x20 | u16 LE |
+| 0x1d | +0x10 | flag byte |
+
+After copying, the dispatcher calls `FUN_080134b4(slot)` to stage the profile into the "active
+program" slot structure (stride `0x26`), computing voltage defaults per chemistry (mode 0/1/2
+from global settings; mode 5 → 1000 mV; mode 7 → 1200 mV; mode 8 → 1500 mV; mode 9 → 2000 mV)
+and a cutoff voltage offset of `-0x14` (−0.20 V).
+
+### Internal BLE-module ↔ STM32 UART protocol (`FUN_08016988`)
+
+A second dispatcher handles frames between the STM32 and the BLE radio module over UART
+(byte-by-byte polled send/receive in `FUN_080167f0` / `FUN_0801613e`). Opcodes include `0x5A`
+(response wrapper), `0x5F` (read profile from charger memory — returns a 64-byte per-slot block),
+`0x88` (enter firmware upgrade mode and reboot), plus `0x05`/`0x11`/`0x55`/`0xFE` mirrors of the
+BLE-facing commands. This layer is not reachable from a BLE client; it exists between the two MCUs
+on the charger's own PCB.
+
+### Firmware upgrade entry (`opcode 0x88`, internal)
+
+Shows "Upgrade Firmware… LCD May Not Display… Please Wait…" then reboots into the bootloader.
+Not exposed over BLE GATT and not implemented in this server.

@@ -16,6 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+use crate::client::ChargerError;
 use crate::mcp::McpService;
 use crate::model::{ChargerModel, Slot, SlotMask};
 use crate::profile::{CycleMode, ProfileParams, build_profile};
@@ -24,6 +25,7 @@ use crate::protocol::{
     voltage_curve_to_csv,
 };
 use crate::safety;
+use crate::transport::TransportError;
 use crate::{ProtocolError, lo8};
 
 /// Confirmation token required by the hardened `mc3000_set_basic`.
@@ -1265,18 +1267,29 @@ impl McpService {
     }
 
     /// Tokenless emergency stop of all slots (`charger.stop_all`).
+    ///
+    /// Each stop waits for the `0xFE` acknowledgement (500 ms timeout,
+    /// best-effort: a timeout logs and continues to the next slot). The ACK
+    /// wait paces the writes — firmware 1.23 dropped stop frames sent
+    /// back-to-back — and confirms each stop reached the charger.
     #[tool(name = "charger.stop_all", description = descriptions::CHARGER_STOP_ALL)]
     pub async fn charger_stop_all(&self) -> Result<CallToolResult, ErrorData> {
         let mut stopped = Vec::new();
         for value in 0..=3u8 {
             let slot = slot_from(value)?;
-            self.client.stop(slot).await.map_err(internal_error)?;
-            stopped.push(value);
-            // Firmware 1.23 drops stop frames sent back-to-back. Pace emergency writes
-            // with the same delay the APK-style profile stop sequence uses.
-            if value < 3 {
-                tokio::time::sleep(Duration::from_millis(500)).await;
+            if let Err(error) = self.client.stop_acked(slot).await {
+                // Only acknowledgement timeouts are best-effort; model gates
+                // and transport failures abort the emergency stop.
+                if matches!(
+                    error,
+                    ChargerError::Transport(TransportError::ReplyTimeout(_))
+                ) {
+                    tracing::warn!(slot = value, %error, "stop_all ack timeout; continuing");
+                } else {
+                    return Err(internal_error(error));
+                }
             }
+            stopped.push(value);
         }
         let result = json!({"sent": "stop_all", "slots": stopped});
         self.session.record("charger.stop_all", &json!({}), &result);
