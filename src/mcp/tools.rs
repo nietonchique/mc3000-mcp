@@ -1272,6 +1272,11 @@ impl McpService {
             let slot = slot_from(value)?;
             self.client.stop(slot).await.map_err(internal_error)?;
             stopped.push(value);
+            // Firmware 1.23 drops stop frames sent back-to-back. Pace emergency writes
+            // with the same delay the APK-style profile stop sequence uses.
+            if value < 3 {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
         }
         let result = json!({"sent": "stop_all", "slots": stopped});
         self.session.record("charger.stop_all", &json!({}), &result);
