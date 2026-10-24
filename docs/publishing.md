@@ -35,7 +35,7 @@ paru -S mc3000-mcp
 # Companion Agent Skill for Codex; replace the destination for another client
 mkdir -p ~/.codex/skills
 curl -fsSL \
-  https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.2/mc3000-mcp-skill-v0.2.2.tar.gz \
+  https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.3/mc3000-mcp-skill-v0.2.3.tar.gz \
   | tar -xz -C ~/.codex/skills
 ```
 
@@ -46,7 +46,7 @@ Hermes users may alternatively run:
 ```bash
 hermes mcp add mc3000 --command mc3000-mcp
 hermes skills install \
-  https://raw.githubusercontent.com/nietonchique/mc3000-mcp/v0.2.2/skill/SKILL.md \
+  https://raw.githubusercontent.com/nietonchique/mc3000-mcp/v0.2.3/skill/SKILL.md \
   --name charger-agent
 ```
 

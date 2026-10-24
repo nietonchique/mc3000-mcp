@@ -44,7 +44,7 @@ cargo install mc3000-mcp --locked
 paru -S mc3000-mcp
 
 # released tag, if you prefer installing from source
-cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.2 --locked
+cargo install --git https://github.com/nietonchique/mc3000-mcp.git --tag v0.2.3 --locked
 ```
 
 A Linux x86_64 MCPB bundle is attached to each release for MCPB-compatible clients.
@@ -94,7 +94,7 @@ Install it for Codex:
 
 ```bash
 mkdir -p ~/.codex/skills
-curl -fsSL https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.2/mc3000-mcp-skill-v0.2.2.tar.gz \
+curl -fsSL https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.3/mc3000-mcp-skill-v0.2.3.tar.gz \
   | tar -xz -C ~/.codex/skills
 ```
 

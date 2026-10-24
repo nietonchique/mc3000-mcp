@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-25
+
+### Fixed
+
+- Pace `charger.stop_all` writes with 500 ms between slots; MC3000 firmware 1.23 dropped
+  back-to-back stop frames, leaving some slots charging after an emergency stop.
+
 ## [0.2.2] - 2026-10-24
 
 ### Fixed
@@ -88,6 +95,7 @@ behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
 Releases before 0.2.0 shipped the Python implementation and predate this changelog.
 
 [Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.2...HEAD
+[0.2.3]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.3
 [0.2.2]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.2
 [0.2.1]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.0

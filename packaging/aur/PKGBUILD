@@ -1,7 +1,7 @@
 # Maintainer: nietonchique <nietonchique@users.noreply.github.com>
 
 pkgname=mc3000-mcp
-pkgver=0.2.2
+pkgver=0.2.3
 pkgrel=1
 pkgdesc='Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth LE'
 arch=('x86_64')
