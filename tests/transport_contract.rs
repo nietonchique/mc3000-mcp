@@ -435,9 +435,9 @@ async fn send_profile_write_order_and_delays() {
     );
     assert_gap(
         gap(instants[3], instants[4]),
-        Duration::from_millis(490),
-        Duration::from_millis(600),
-        "chunk 2 -> start 0",
+        Duration::from_secs(5),
+        Duration::from_secs(6),
+        "chunk 2 -> profile settle -> start 0",
     );
     assert_gap(
         gap(instants[4], instants[5]),

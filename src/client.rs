@@ -36,6 +36,9 @@ pub const SLOT_POLL_GAP: Duration = Duration::from_millis(50);
 pub const PROFILE_STOP_DELAY: Duration = Duration::from_millis(500);
 /// Delay between the two profile chunk writes (Python `asyncio.sleep(0.05)`).
 pub const PROFILE_CHUNK_GAP: Duration = Duration::from_millis(50);
+/// Delay after profile chunks before the charger can reliably accept starts.
+/// Live MC3000 firmware 1.23 ignored immediate starts; 5 seconds is repeatable.
+pub const PROFILE_SETTLE_DELAY: Duration = Duration::from_secs(5);
 /// Delay between the profile chunks and the start writes
 /// (Python `asyncio.sleep(0.5)`).
 pub const PROFILE_START_DELAY: Duration = Duration::from_millis(500);
@@ -428,7 +431,8 @@ impl<T: Transport> ChargerClient<T> {
 
     /// Apply a 40-byte profile with the exact APK write order: stop every
     /// masked slot (500 ms after each), write chunk 1, wait 50 ms, write
-    /// chunk 2; when `start`, wait 500 ms and start every masked slot.
+    /// chunk 2, wait 5 seconds for the charger to settle; when `start`, wait
+    /// another 500 ms and start every masked slot.
     /// Requires a write-capable model.
     ///
     /// # Errors
@@ -457,6 +461,9 @@ impl<T: Transport> ChargerClient<T> {
         self.transport.write(&first).await?;
         tokio::time::sleep(PROFILE_CHUNK_GAP).await;
         self.transport.write(&second).await?;
+        // The charger acknowledged profile writes but ignored starts issued immediately.
+        // Keep the protocol settle wait inside the client so callers cannot race it.
+        tokio::time::sleep(PROFILE_SETTLE_DELAY).await;
         if start {
             tokio::time::sleep(PROFILE_START_DELAY).await;
             for value in 0..=3u8 {
