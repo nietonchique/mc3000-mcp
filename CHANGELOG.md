@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-25
+
 ### Changed
 
 - `send_profile` and `charger.stop_all` now wait for firmware acknowledgements instead of using
@@ -114,7 +116,8 @@ behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
 
 Releases before 0.2.0 shipped the Python implementation and predate this changelog.
 
-[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.4
 [0.2.3]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.3
 [0.2.2]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.2
 [0.2.1]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.1
