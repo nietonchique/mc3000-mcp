@@ -625,13 +625,80 @@ fn invalid_inputs_rejected() {
         SlotMask::try_from(16),
         Err(ProtocolError::InvalidSlotMask)
     ));
+    // Firmware-side basic-settings bounds (reverse-engineered, fw 1.27):
+    // temp_unit < 2, display < 6, cooling_fan < 10, input_mv 10000..=13000.
     assert_eq!(
         command_set_basic(&BasicSettings {
             input_mv: 70_000,
             ..BasicSettings::default()
         }),
-        Err(ProtocolError::U16OutOfRange(70_000))
+        Err(ProtocolError::BasicValueOutOfRange {
+            field: "input_mv",
+            min: 10_000,
+            max: 13_000,
+            value: 70_000
+        })
     );
+    assert_eq!(
+        command_set_basic(&BasicSettings {
+            temp_unit: 2,
+            ..BasicSettings::default()
+        }),
+        Err(ProtocolError::BasicValueOutOfRange {
+            field: "temp_unit",
+            min: 0,
+            max: 1,
+            value: 2
+        })
+    );
+    assert_eq!(
+        command_set_basic(&BasicSettings {
+            display: 6,
+            ..BasicSettings::default()
+        }),
+        Err(ProtocolError::BasicValueOutOfRange {
+            field: "display",
+            min: 0,
+            max: 5,
+            value: 6
+        })
+    );
+    assert_eq!(
+        command_set_basic(&BasicSettings {
+            cooling_fan: 10,
+            ..BasicSettings::default()
+        }),
+        Err(ProtocolError::BasicValueOutOfRange {
+            field: "cooling_fan",
+            min: 0,
+            max: 9,
+            value: 10
+        })
+    );
+    assert_eq!(
+        command_set_basic(&BasicSettings {
+            input_mv: 9_999,
+            ..BasicSettings::default()
+        }),
+        Err(ProtocolError::BasicValueOutOfRange {
+            field: "input_mv",
+            min: 10_000,
+            max: 13_000,
+            value: 9_999
+        })
+    );
+    // Boundary values are accepted and produce the firmware frame.
+    let boundary = match command_set_basic(&BasicSettings {
+        temp_unit: 1,
+        display: 5,
+        cooling_fan: 9,
+        input_mv: 13_000,
+        ..BasicSettings::default()
+    }) {
+        Ok(frame) => frame,
+        Err(error) => panic!("boundary values rejected: {error}"),
+    };
+    assert_eq!(boundary[7], 0x32, "13000 mV big-endian high byte");
     assert_eq!(
         parse_status(b"short"),
         Err(ProtocolError::FrameTooShort {

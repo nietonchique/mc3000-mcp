@@ -447,17 +447,25 @@ impl<T: Transport> ChargerClient<T> {
     }
 
     /// Write basic settings and await the acknowledgement. Requires a
-    /// write-capable model.
+    /// write-capable model. A zero result byte in the acknowledgement (the
+    /// firmware rejected the values) surfaces as
+    /// [`ProtocolError::CommandRejected`].
     ///
     /// # Errors
     ///
-    /// Model gate errors, [`ChargerError::Protocol`] for out-of-range values,
-    /// plus the [`ChargerClient::request`] errors.
+    /// Model gate errors, [`ChargerError::Protocol`] for out-of-range values
+    /// or a zero-result acknowledgement, plus the [`ChargerClient::request`]
+    /// errors.
     pub async fn set_basic(&self, settings: &BasicSettings) -> Result<Notification, ChargerError> {
         self.require_write_model()?;
         let frame = command_set_basic(settings)?;
-        self.request(&frame, Some(Opcode::SetBasic), REQUEST_TIMEOUT)
-            .await
+        let reply = self
+            .request(&frame, Some(Opcode::SetBasic), REQUEST_TIMEOUT)
+            .await?;
+        if let Notification::Ack { ok: false, .. } = &reply {
+            return Err(ProtocolError::CommandRejected.into());
+        }
+        Ok(reply)
     }
 
     /// Apply a 40-byte profile with APK write order and firmware-level

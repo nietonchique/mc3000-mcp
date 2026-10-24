@@ -60,6 +60,24 @@ pub enum ProtocolError {
     /// A value outside `0..=65535` was written into a big-endian `u16` field.
     #[error("value for u16 out of range: {0}")]
     U16OutOfRange(i64),
+    /// A basic-settings field violated the firmware-side acceptance bounds
+    /// (reverse-engineered from firmware 1.27; violating values are silently
+    /// dropped by the charger, which ACKs with a zero result byte).
+    #[error("basic setting {field} must be {min}..={max}, got {value}")]
+    BasicValueOutOfRange {
+        /// Settings field name (`temp_unit`, `display`, `cooling_fan`, `input_mv`).
+        field: &'static str,
+        /// Inclusive firmware lower bound.
+        min: i64,
+        /// Inclusive firmware upper bound.
+        max: i64,
+        /// Rejected value.
+        value: i64,
+    },
+    /// The charger acknowledged a write with a zero result byte (the firmware
+    /// rejected the command, e.g. out-of-bounds `0x63` basic settings).
+    #[error("charger rejected the command (acknowledgement result byte is 0)")]
+    CommandRejected,
     /// A profile slot mask outside `0..=0x0F` was requested.
     #[error("slot_mask must be a bitmask 0..15 (slot1=1, slot2=2, slot3=4, slot4=8)")]
     InvalidSlotMask,

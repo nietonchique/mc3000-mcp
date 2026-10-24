@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   issued immediately after an acknowledged profile.
 - Firmware 1.13 (which never acknowledges `0x11`) falls back to the settle delay and caches the
   behaviour per connection, so later profile writes skip the acknowledgement wait.
+- `mc3000_set_basic` now enforces the firmware-side acceptance bounds recovered from the
+  firmware image (`temp_unit` 0..=1, `display` 0..=5, `cooling_fan` 0..=9, `input_mv`
+  10000..=13000 mV) and treats a zero-result acknowledgement as a rejected write instead of a
+  success.
 
 ### Fixed
 

@@ -12,11 +12,14 @@ use std::time::Duration;
 
 use mc3000_mcp::client::{ChargerClient, ChargerError, ConnectInfo, SLOT_POLL_GAP};
 use mc3000_mcp::model::{ChargerModel, Slot};
-use mc3000_mcp::protocol::{
-    self, BasicSettings, Notification, Opcode, StatusPayload, command_get_basic,
-    command_get_status, command_start, command_stop, with_checksum,
-};
 use mc3000_mcp::transport::{FakeTransport, ScanDevice, Transport, TransportError, timeout_secs};
+use mc3000_mcp::{
+    ProtocolError,
+    protocol::{
+        self, BasicSettings, Notification, Opcode, StatusPayload, command_get_basic,
+        command_get_status, command_start, command_stop, with_checksum,
+    },
+};
 
 const ADDRESS: &str = "AA:BB:CC:DD:EE:02";
 
@@ -675,6 +678,25 @@ async fn set_basic_write_reaches_device_and_ack_matches() {
     }
     let writes = fake.writes();
     assert_eq!(writes.len(), 1);
+}
+
+/// The firmware acknowledges rejected `0x63` writes with a zero result byte;
+/// `set_basic` must surface that as [`ProtocolError::CommandRejected`]
+/// instead of reporting success.
+#[tokio::test]
+async fn set_basic_zero_result_ack_is_rejected() {
+    let (client, fake) = connected_client(ChargerModel::Mc3000).await;
+    let mut rejected = set_basic_ack();
+    rejected[2] = 0; // firmware failure result byte
+    fake.inject(&rejected);
+    let result = client.set_basic(&BasicSettings::default()).await;
+    assert!(
+        matches!(
+            result,
+            Err(ChargerError::Protocol(ProtocolError::CommandRejected))
+        ),
+        "expected CommandRejected, got {result:?}"
+    );
 }
 
 #[tokio::test]

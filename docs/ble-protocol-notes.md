@@ -51,6 +51,30 @@ does NOT stop charging. Individual slot bits (`0x01`–`0x08`) stop the correspo
 Reliable multi-slot stops must therefore send one stop frame per slot, waiting for each ACK
 before the next write (firmware 1.23 drops back-to-back stop frames).
 
+### ACK result byte
+
+ACK byte 2 echoes the request mask for `0x05`/`0xFE`/`0x11`. For `0x63` (basic settings) it is a
+result code: `1` accepted, `0` rejected. Firmware 1.27 validates `0x63` values before applying:
+
+| Frame byte | Field | Accepted values |
+| --- | --- | --- |
+| 2 | temp_unit | `0..=1` |
+| 3 | system_beep | `0..=1` |
+| 4 | display | `0..=5` |
+| 5 | screensaver | `0..=1` |
+| 6 | cooling_fan | `0..=9` |
+| 7–8 | input_mv (BE u16) | `10000..=13000` |
+
+Rejected values are not applied and produce a zero result byte — clients must treat
+`ack[2] == 0` on `0x63` as a failed write.
+
+### Firmware-side profile validation
+
+The `0x11` handler copies profile bytes into per-slot storage without any bounds checks
+(reversing `FUN_08016524`: a straight field-by-field copy). The firmware trusts profile bytes
+completely; client-side validation is the only safety gate, which is why the server enforces
+typed profiles and safety limits before any write.
+
 ## MC3000 vs MC5000 status selection
 
 The server must not infer charger model from inserted batteries. Detect or select the model using read-only charger/protocol behavior:

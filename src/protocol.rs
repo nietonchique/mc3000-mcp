@@ -484,7 +484,50 @@ impl Default for BasicSettings {
 /// # Errors
 ///
 /// [`ProtocolError::U16OutOfRange`] when `input_mv` exceeds 65535.
+/// [`ProtocolError::BasicValueOutOfRange`] when a field violates the
+/// firmware-side acceptance bounds (`temp_unit < 2`, `display < 6`,
+/// `cooling_fan < 10`, `input_mv` 10000..=13000 mV; firmware 1.27).
 pub fn command_set_basic(settings: &BasicSettings) -> Result<[u8; FRAME_LEN], ProtocolError> {
+    const TEMP_UNIT_MAX: i64 = 1;
+    const DISPLAY_MAX: i64 = 5;
+    const COOLING_FAN_MAX: i64 = 9;
+    const INPUT_MV_RANGE: std::ops::RangeInclusive<i64> = 10_000..=13_000;
+    let temp_unit = i64::from(settings.temp_unit);
+    if temp_unit > TEMP_UNIT_MAX {
+        return Err(ProtocolError::BasicValueOutOfRange {
+            field: "temp_unit",
+            min: 0,
+            max: TEMP_UNIT_MAX,
+            value: temp_unit,
+        });
+    }
+    let display = i64::from(settings.display);
+    if display > DISPLAY_MAX {
+        return Err(ProtocolError::BasicValueOutOfRange {
+            field: "display",
+            min: 0,
+            max: DISPLAY_MAX,
+            value: display,
+        });
+    }
+    let cooling_fan = i64::from(settings.cooling_fan);
+    if cooling_fan > COOLING_FAN_MAX {
+        return Err(ProtocolError::BasicValueOutOfRange {
+            field: "cooling_fan",
+            min: 0,
+            max: COOLING_FAN_MAX,
+            value: cooling_fan,
+        });
+    }
+    let input_mv = i64::from(settings.input_mv);
+    if !INPUT_MV_RANGE.contains(&input_mv) {
+        return Err(ProtocolError::BasicValueOutOfRange {
+            field: "input_mv",
+            min: *INPUT_MV_RANGE.start(),
+            max: *INPUT_MV_RANGE.end(),
+            value: input_mv,
+        });
+    }
     let mut buf = [0u8; FRAME_LEN];
     buf[0] = 0x0F;
     buf[1] = Opcode::SetBasic.as_u8();
