@@ -99,7 +99,7 @@ class Mcp:
                 self.process.kill()
 
 
-def wait_for_charger(deadline: float = 240.0) -> list[dict[str, Any]]:
+def wait_for_charger(deadline: float = 1500.0) -> list[dict[str, Any]]:
     end = time.monotonic() + deadline
     attempt = 0
     while time.monotonic() < end:
@@ -107,12 +107,16 @@ def wait_for_charger(deadline: float = 240.0) -> list[dict[str, Any]]:
         client = Mcp()
         try:
             client.initialize()
-            result = client.tool("charger.scan_devices", {"timeout": 12})
+            result = client.tool("charger.scan_devices", {"timeout": 25})
             devices = result.get("devices", [])
             if devices:
                 event("charger_discovered", devices=devices, attempt=attempt)
                 return devices
             event("charger_not_seen", attempt=attempt)
+        except Exception as error:
+            # At boot BlueZ and the two local adapters can race with btleplug.
+            # Treat every transient backend failure as "not seen yet" and retry.
+            event("scan_attempt_failed", attempt=attempt, error=str(error))
         finally:
             client.close()
         time.sleep(5)
