@@ -8,18 +8,7 @@
     "url": "https://github.com/nietonchique/mc3000-mcp",
     "source": "github"
   },
-  "version": "0.2.1",
-  "packages": [
-    {
-      "registryType": "mcpb",
-      "identifier": "https://github.com/nietonchique/mc3000-mcp/releases/download/v0.2.1/0.2.1-x86_64-unknown-linux-gnu.mcpb",
-      "version": "0.2.1",
-      "fileSha256": "7dae9261c1eeabae3d4a4ff08732a6dad242cbad8e28eac7c129ea8d101cf6da",
-      "transport": {
-        "type": "stdio"
-      }
-    }
-  ],
+  "version": "0.2.2",
   "tools": [
     "mc3000_scan",
     "mc3000_connect",

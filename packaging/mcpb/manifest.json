@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "mc3000-mcp",
   "display_name": "MC3000 Charger",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Safe MCP server for SKYRC MC3000-compatible battery chargers over Bluetooth Low Energy.",
   "author": {
     "name": "nietonchique"

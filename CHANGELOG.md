@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-24
+
+### Fixed
+
+- Scan all local BLE adapters concurrently instead of spending the whole timeout on the first
+  adapter; this fixes discovery on multi-adapter hosts.
+- Wait five seconds after profile chunk writes before starting slots; MC3000 firmware 1.23 ignored
+  immediate starts despite accepting the profile.
+- Tolerate transient BlueZ startup races while waiting for the charger to advertise.
+
+### Added
+
+- Supervised full-use-case runner for read-only checks, profile dry-runs, live writes, starts, and
+  charging monitoring.
+- Standalone Agent Skill archive in release assets.
+
+### Changed
+
+- Corrected the bundled conservative NiMH profile source metadata to GP AA 2600 mAh.
+- Disabled Dependabot version updates for this repository.
+
 ## [0.2.1] - 2026-10-23
 
 ### Fixed
@@ -66,6 +87,7 @@ behavior, and zero-based API slots `0..3` (physical slots `1..4`) are unchanged.
 
 Releases before 0.2.0 shipped the Python implementation and predate this changelog.
 
-[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nietonchique/mc3000-mcp/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.2
 [0.2.1]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nietonchique/mc3000-mcp/releases/tag/v0.2.0

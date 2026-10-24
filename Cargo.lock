@@ -792,7 +792,7 @@ dependencies = [
 
 [[package]]
 name = "mc3000-mcp"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",

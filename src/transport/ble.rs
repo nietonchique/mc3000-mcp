@@ -15,6 +15,7 @@ use btleplug::api::{
 };
 use btleplug::platform::{Adapter, Manager as PlatformManager, Peripheral};
 use futures::StreamExt;
+use futures::future::join_all;
 use tracing::warn;
 
 use super::{
@@ -187,10 +188,20 @@ impl Transport for BleTransport {
         if adapters.is_empty() {
             return Err(TransportError::NoAdapter);
         }
+
+        // Scan every local adapter concurrently. A two-adapter machine must not consume the
+        // entire timeout on the first adapter only; the GP AA charger may advertise through
+        // either controller.
+        let results = join_all(
+            adapters
+                .iter()
+                .map(|adapter| scan_adapter(adapter, timeout)),
+        )
+        .await;
         let mut devices = Vec::new();
         let mut failure: Option<TransportError> = None;
-        for adapter in &adapters {
-            match scan_adapter(adapter, timeout).await {
+        for result in results {
+            match result {
                 Ok(mut found) => devices.append(&mut found),
                 Err(error) => {
                     if failure.is_none() {
